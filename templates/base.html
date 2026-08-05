@@ -91,9 +91,9 @@
 
     <!-- Header Navigation -->
     <header class="sticky top-0 z-40 glass-panel border-b border-white/10 px-4 md:px-8 py-3 transition-all duration-300">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
             
-            <div class="flex items-center justify-between w-full md:w-auto gap-4">
+            <div class="flex items-center justify-between w-full lg:w-auto gap-4 shrink-0">
                 <!-- Logo -->
                 <a href="{% url 'index' %}" class="flex items-center gap-2 group">
                     <div class="w-10 h-10 rounded-xl bg-brand-gold flex items-center justify-center text-black font-extrabold text-xl shadow-lg shadow-brand-gold/20 group-hover:scale-105 transition-transform">
@@ -140,7 +140,7 @@
             </div>
 
             <!-- Live Search Bar -->
-            <div class="relative flex-1 max-w-md w-full">
+            <div class="relative w-full lg:w-72 shrink-0">
                 <div class="relative">
                     <input 
                         type="text" 
@@ -154,7 +154,7 @@
                     <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5"></i>
                 </div>
                 <!-- Dropdown results -->
-                <div id="search-results-dropdown" class="absolute top-full left-0 right-0 mt-2 z-50"></div>
+                <div id="search-results-dropdown" class="absolute top-full left-0 mt-2 z-50 w-80 md:w-96 max-w-[calc(100vw-2rem)]"></div>
             </div>
 
             <!-- Nav Links -->
@@ -219,6 +219,25 @@
         lucide.createIcons();
         document.body.addEventListener('htmx:afterSwap', function() {
             lucide.createIcons();
+        });
+
+        // Close search dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const searchDropdown = document.getElementById('search-results-dropdown');
+            const searchInput = document.querySelector('input[name="q"]');
+            if (searchDropdown && !searchDropdown.contains(e.target) && searchInput && !searchInput.contains(e.target)) {
+                searchDropdown.innerHTML = '';
+            }
+        });
+
+        // Close search dropdown on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const searchDropdown = document.getElementById('search-results-dropdown');
+                if (searchDropdown) {
+                    searchDropdown.innerHTML = '';
+                }
+            }
         });
     </script>
 </body>

@@ -123,8 +123,9 @@ def movie_grid_partial(request):
 
 def search_live_partial(request):
     ctx = get_base_context(request)
+    lang = ctx["current_lang"]
     query = request.GET.get("q", "")
-    results = services.search_movies(query, limit=8)
+    results = services.search_movies(query, lang=lang, limit=8)
     ratings = profiles.get_active_ratings(request.session)
 
     for item in results:
@@ -142,7 +143,14 @@ def movie_modal_partial(request, movie_id):
     lang = i18n.get_lang(request.session)
     movie = services.get_movie_by_id(movie_id)
     if not movie:
-        return HttpResponse("Film nie został znaleziony.", status=404)
+        movie = {
+            "movie_id": int(movie_id),
+            "title": "",
+            "poster_url": "",
+            "backdrop_url": "",
+            "vote_average": 0.0,
+            "year": None,
+        }
 
     prepare_movie_item(movie)
     tmdb_info = tmdb.fetch_movie_details(movie_id, lang=lang)
@@ -150,6 +158,9 @@ def movie_modal_partial(request, movie_id):
         for k, v in tmdb_info.items():
             if v is not None:
                 movie[k] = v
+
+    if not movie.get("title"):
+        return HttpResponse("Film lub serial nie został znaleziony.", status=404)
 
     recommendations = services.get_recommendations(movie_id, top_n=8)
     for rec in recommendations:

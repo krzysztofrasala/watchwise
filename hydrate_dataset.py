@@ -26,10 +26,11 @@ def fetch_movie_meta(movie_id):
                 "runtime": int(d.get("runtime") or 0),
                 "overview": d.get("overview") or "",
                 "tagline": d.get("tagline") or "",
+                "original_language": d.get("original_language") or "",
             }
     except Exception:
         pass
-    return {"movie_id": movie_id, "poster_path": "", "backdrop_path": "", "vote_average": 0.0, "runtime": 0, "overview": "", "tagline": ""}
+    return {"movie_id": movie_id, "poster_path": "", "backdrop_path": "", "vote_average": 0.0, "runtime": 0, "overview": "", "tagline": "", "original_language": ""}
 
 def main():
     print("Loading movies.csv...")
@@ -57,6 +58,7 @@ def main():
     df["runtime"] = df["id"].map(lambda x: results.get(x, {}).get("runtime", 0))
     df["overview"] = df["id"].map(lambda x: results.get(x, {}).get("overview", ""))
     df["tagline"] = df["id"].map(lambda x: results.get(x, {}).get("tagline", ""))
+    df["original_language"] = df["id"].map(lambda x: results.get(x, {}).get("original_language", ""))
 
     df.to_csv(csv_path, index=False)
     print("Done! Updated data/movies.csv successfully.")
