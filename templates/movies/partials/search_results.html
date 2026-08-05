@@ -1,3 +1,4 @@
+{% load i18n_tags %}
 {% if results %}
 <div class="glass-panel rounded-2xl p-2 shadow-2xl border border-white/15 max-h-96 overflow-y-auto space-y-1">
     {% for item in results %}
@@ -21,6 +22,6 @@
 </div>
 {% elif query|length >= 2 %}
 <div class="glass-panel rounded-2xl p-4 text-center text-xs text-gray-400 shadow-2xl">
-    Nie znaleziono filmu o tytule "{{ query }}"
+    {{ "no_search_results"|t:current_lang }} "{{ query }}"
 </div>
 {% endif %}

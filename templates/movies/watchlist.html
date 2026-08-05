@@ -1,16 +1,19 @@
 {% extends 'base.html' %}
+{% load i18n_tags %}
+
+{% block title %}{{ "my_watchlist"|t:current_lang }} — CineScope 2.0{% endblock %}
 
 {% block content %}
 <div class="space-y-6 py-4">
     <div class="flex items-center justify-between border-b border-white/10 pb-4">
         <div>
             <h1 class="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                <i data-lucide="bookmark" class="w-8 h-8 text-emerald-400"></i> Moja Watchlista
+                <i data-lucide="bookmark" class="w-8 h-8 text-emerald-400"></i> {{ "my_watchlist"|t:current_lang }}
             </h1>
-            <p class="text-xs text-gray-400">Zapisane filmy na później</p>
+            <p class="text-xs text-gray-400">{{ "saved_movies_for_later"|t:current_lang }}</p>
         </div>
         <span class="bg-emerald-500/20 text-emerald-400 font-bold px-3 py-1 rounded-full text-xs border border-emerald-500/30">
-            {{ watchlist_count }} filmów
+            {{ watchlist_count }} {{ "movies_count"|t:current_lang }}
         </span>
     </div>
 
@@ -43,12 +46,12 @@
     {% else %}
     <div class="py-16 text-center text-gray-400 space-y-4 glass-panel rounded-3xl">
         <i data-lucide="bookmark" class="w-12 h-12 mx-auto text-gray-600"></i>
-        <h3 class="text-base font-bold text-white">Twoja Watchlista jest pusta</h3>
+        <h3 class="text-base font-bold text-white">{{ "watchlist_empty_title"|t:current_lang }}</h3>
         <p class="text-xs text-gray-400 max-w-sm mx-auto">
-            Przeglądaj filmy w sekcji Odkrywaj i kliknij "+ Dodaj do Watchlisty" przy wybranym filmie!
+            {{ "watchlist_empty_desc"|t:current_lang }}
         </p>
         <a href="{% url 'index' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-gold text-black font-bold text-xs shadow-lg shadow-brand-gold/20 hover:scale-105 transition-transform">
-            Przeglądaj Filmy
+            {{ "browse_movies"|t:current_lang }}
         </a>
     </div>
     {% endif %}

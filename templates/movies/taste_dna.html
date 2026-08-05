@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% load i18n_tags %}
+
+{% block title %}{{ "nav_taste_dna"|t:current_lang }} — CineScope 2.0{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+    <!-- Header Section -->
+    <div class="glass-panel p-6 md:p-8 rounded-3xl border border-white/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="space-y-2 text-center md:text-left z-10">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/20 text-xs font-bold">
+                <i data-lucide="dna" class="w-4 h-4"></i> {{ "taste_dna_badge"|t:current_lang }}
+            </div>
+            <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">{{ "taste_dna_title"|t:current_lang }}</h1>
+            <p class="text-sm text-gray-400 max-w-xl">
+                {{ "taste_dna_desc"|t:current_lang }} ({{ active_profile }}).
+            </p>
+        </div>
+
+        <!-- Persona Badge Card -->
+        <div class="glass-card p-6 rounded-2xl border border-pink-500/30 flex items-center gap-4 bg-gradient-to-br from-pink-950/30 to-purple-950/30 shrink-0 z-10">
+            <div class="text-5xl shrink-0 p-3 bg-white/5 rounded-2xl border border-white/10">
+                {{ taste_data.persona_icon }}
+            </div>
+            <div>
+                <span class="text-[10px] font-extrabold uppercase text-pink-400 tracking-wider">{{ "persona_title"|t:current_lang }}</span>
+                <h3 class="text-xl font-black text-white leading-tight">{{ taste_data.persona_title }}</h3>
+                <p class="text-xs text-gray-300 max-w-xs mt-1">{{ taste_data.persona_desc }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "total_rated"|t:current_lang }}</div>
+            <div class="text-3xl font-black text-brand-gold">{{ taste_data.total_rated }}</div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "watchlist_count"|t:current_lang }}</div>
+            <div class="text-3xl font-black text-emerald-400">{{ taste_data.total_watchlist }}</div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "top_genre"|t:current_lang }}</div>
+            <div class="text-xl font-bold text-pink-400 truncate">{{ taste_data.genre_labels.0|default:"no_data"|t:current_lang }}</div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "top_decade"|t:current_lang }}</div>
+            <div class="text-xl font-bold text-purple-400 truncate">{{ taste_data.decade_labels.0|default:"no_data"|t:current_lang }}</div>
+        </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Genre Radar Chart -->
+        <div class="glass-panel p-6 rounded-3xl space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i data-lucide="pie-chart" class="w-5 h-5 text-pink-400"></i> {{ "genre_affinity"|t:current_lang }}
+            </h3>
+            <div class="relative h-72">
+                <canvas id="genreChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Decade Bar Chart -->
+        <div class="glass-panel p-6 rounded-3xl space-y-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 text-purple-400"></i> {{ "decade_affinity"|t:current_lang }}
+            </h3>
+            <div class="relative h-72">
+                <canvas id="decadeChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const tasteData = JSON.parse('{{ taste_data_json|escapejs }}');
+
+        // Genre Radar Chart
+        const genreCtx = document.getElementById('genreChart').getContext('2d');
+        new Chart(genreCtx, {
+            type: 'radar',
+            data: {
+                labels: tasteData.genre_labels,
+                datasets: [{
+                    label: 'Affinity',
+                    data: tasteData.genre_values,
+                    backgroundColor: 'rgba(236, 72, 153, 0.25)',
+                    borderColor: '#ec4899',
+                    pointBackgroundColor: '#F5C518',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#ec4899'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: { color: '#e5e7eb', font: { size: 12, family: 'Inter' } },
+                        ticks: { display: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Decade Bar Chart
+        const decadeCtx = document.getElementById('decadeChart').getContext('2d');
+        new Chart(decadeCtx, {
+            type: 'bar',
+            data: {
+                labels: tasteData.decade_labels,
+                datasets: [{
+                    label: 'Affinity',
+                    data: tasteData.decade_values,
+                    backgroundColor: 'rgba(168, 85, 247, 0.6)',
+                    borderColor: '#a855f7',
+                    borderWidth: 1,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
