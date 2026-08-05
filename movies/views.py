@@ -6,13 +6,24 @@ from . import services, tmdb
 def index(request):
     genres = services.get_all_genres()
     filtered = services.filter_movies(genre="All", sort_by="vote_desc", per_page=24)
-    hero_movie = services.get_random_movie()
+    
+    # Pick a top-rated hero movie with a poster and backdrop
+    hero_movie = None
+    if filtered["items"]:
+        for candidate in filtered["items"]:
+            if candidate.get("poster_path") and candidate.get("overview"):
+                hero_movie = candidate
+                break
+        if not hero_movie:
+            hero_movie = filtered["items"][0]
 
     if hero_movie:
         hero_movie["poster_url"] = tmdb.get_poster_url(hero_movie.get("poster_path"))
         tmdb_info = tmdb.fetch_movie_details(hero_movie["movie_id"])
         if tmdb_info:
-            hero_movie.update(tmdb_info)
+            for k, v in tmdb_info.items():
+                if v:
+                    hero_movie[k] = v
 
     for item in filtered["items"]:
         item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
@@ -84,7 +95,9 @@ def movie_modal_partial(request, movie_id):
     movie["poster_url"] = tmdb.get_poster_url(movie.get("poster_path"))
     tmdb_info = tmdb.fetch_movie_details(movie_id)
     if tmdb_info:
-        movie.update(tmdb_info)
+        for k, v in tmdb_info.items():
+            if v:
+                movie[k] = v
 
     recommendations = services.get_recommendations(movie_id, top_n=8)
     for rec in recommendations:
@@ -112,7 +125,9 @@ def roulette(request):
             selected_movie["poster_url"] = tmdb.get_poster_url(selected_movie.get("poster_path"))
             tmdb_info = tmdb.fetch_movie_details(selected_movie["movie_id"])
             if tmdb_info:
-                selected_movie.update(tmdb_info)
+                for k, v in tmdb_info.items():
+                    if v:
+                        selected_movie[k] = v
 
     context = {
         "genres": genres,

@@ -41,26 +41,29 @@ def load_dataset():
     raw_df = raw_df.rename(columns={"id": "movie_id"})
 
     cols_to_merge = ["movie_id", "year", "genres_list"]
-    for col in ["poster_path", "vote_average", "runtime", "overview"]:
+    for col in ["poster_path", "backdrop_path", "vote_average", "runtime", "overview", "tagline"]:
         if col in raw_df.columns:
             cols_to_merge.append(col)
 
     merged = movies_df.merge(raw_df[cols_to_merge], on="movie_id", how="left")
 
-    if "poster_path" not in merged.columns:
-        merged["poster_path"] = ""
+    for col in ["poster_path", "backdrop_path", "overview", "tagline"]:
+        if col not in merged.columns:
+            merged[col] = ""
+        else:
+            merged[col] = merged[col].fillna("")
+
     if "vote_average" not in merged.columns:
         merged["vote_average"] = 0.0
+    else:
+        merged["vote_average"] = merged["vote_average"].fillna(0.0).round(1)
+
     if "runtime" not in merged.columns:
         merged["runtime"] = 0
-    if "overview" not in merged.columns:
-        merged["overview"] = ""
+    else:
+        merged["runtime"] = merged["runtime"].fillna(0).astype(int)
 
-    merged["vote_average"] = merged["vote_average"].fillna(0.0).round(1)
     merged["year"] = merged["year"].fillna(0).astype(int)
-    merged["runtime"] = merged["runtime"].fillna(0).astype(int)
-    merged["poster_path"] = merged["poster_path"].fillna("")
-    merged["overview"] = merged["overview"].fillna("")
 
     return merged, neighbors
 

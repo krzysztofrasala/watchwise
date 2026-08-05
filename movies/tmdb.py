@@ -5,19 +5,20 @@ from functools import lru_cache
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
 DEFAULT_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=500&auto=format&fit=crop"
+DEFAULT_API_KEY = "REMOVED"
 
 def get_api_key():
-    return os.environ.get("TMDB_API_KEY")
+    return os.environ.get("TMDB_API_KEY") or DEFAULT_API_KEY
 
 def get_poster_url(poster_path: str, size: str = "w500") -> str:
-    if not poster_path or str(poster_path) == "nan":
+    if not poster_path or str(poster_path) in ["nan", "None", ""]:
         return DEFAULT_POSTER
     if poster_path.startswith("http"):
         return poster_path
     path = poster_path if poster_path.startswith("/") else f"/{poster_path}"
     return f"{IMAGE_BASE_URL}/{size}{path}"
 
-@lru_cache(maxsize=200)
+@lru_cache(maxsize=300)
 def fetch_movie_details(movie_id: int):
     """Fetch extended movie details from TMDB including videos (trailers) and cast."""
     api_key = get_api_key()
@@ -46,7 +47,7 @@ def fetch_movie_details(movie_id: int):
 
             return {
                 "tagline": data.get("tagline", ""),
-                "overview": data.get("overview", ""),
+                "overview": data.get("overview", "") or data.get("tagline", ""),
                 "trailer_key": trailer_key,
                 "cast": cast,
                 "director": director,
