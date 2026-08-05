@@ -6,8 +6,8 @@
 {% if hero_movie %}
 <section class="relative rounded-3xl overflow-hidden glass-panel border border-white/10 mb-10 shadow-2xl">
     <div class="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/90 to-transparent z-10"></div>
-    {% if hero_movie.backdrop_path %}
-    <img src="{{ hero_movie.backdrop_path }}" alt="{{ hero_movie.title }}" class="absolute inset-0 w-full h-full object-cover object-center opacity-40">
+    {% if hero_movie.backdrop_url %}
+    <img src="{{ hero_movie.backdrop_url }}" alt="{{ hero_movie.title }}" class="absolute inset-0 w-full h-full object-cover object-center opacity-40">
     {% else %}
     <img src="{{ hero_movie.poster_url }}" alt="{{ hero_movie.title }}" class="absolute inset-0 w-full h-full object-cover object-center opacity-25 filter blur-sm">
     {% endif %}

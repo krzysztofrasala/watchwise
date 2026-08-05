@@ -18,6 +18,14 @@ def get_poster_url(poster_path: str, size: str = "w500") -> str:
     path = poster_path if poster_path.startswith("/") else f"/{poster_path}"
     return f"{IMAGE_BASE_URL}/{size}{path}"
 
+def get_backdrop_url(backdrop_path: str, size: str = "w1280") -> str:
+    if not backdrop_path or str(backdrop_path) in ["nan", "None", ""]:
+        return ""
+    if backdrop_path.startswith("http"):
+        return backdrop_path
+    path = backdrop_path if backdrop_path.startswith("/") else f"/{backdrop_path}"
+    return f"{IMAGE_BASE_URL}/{size}{path}"
+
 @lru_cache(maxsize=300)
 def fetch_movie_details(movie_id: int):
     """Fetch extended movie details from TMDB including videos (trailers) and cast."""
@@ -51,7 +59,7 @@ def fetch_movie_details(movie_id: int):
                 "trailer_key": trailer_key,
                 "cast": cast,
                 "director": director,
-                "backdrop_path": f"{IMAGE_BASE_URL}/w1280{data['backdrop_path']}" if data.get("backdrop_path") else None,
+                "backdrop_url": f"{IMAGE_BASE_URL}/w1280{data['backdrop_path']}" if data.get("backdrop_path") else None,
                 "vote_count": data.get("vote_count", 0),
             }
     except Exception:

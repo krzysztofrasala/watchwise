@@ -3,30 +3,37 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
 from . import services, tmdb
 
+def prepare_movie_item(item: dict) -> dict:
+    item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
+    item["backdrop_url"] = tmdb.get_backdrop_url(item.get("backdrop_path"))
+    try:
+        item["vote_average"] = round(float(item.get("vote_average") or 0.0), 1)
+    except (ValueError, TypeError):
+        item["vote_average"] = 0.0
+    return item
+
 def index(request):
     genres = services.get_all_genres()
     filtered = services.filter_movies(genre="All", sort_by="vote_desc", per_page=24)
     
-    # Pick a top-rated hero movie with a poster and backdrop
+    for item in filtered["items"]:
+        prepare_movie_item(item)
+
     hero_movie = None
     if filtered["items"]:
         for candidate in filtered["items"]:
-            if candidate.get("poster_path") and candidate.get("overview"):
+            if candidate.get("poster_path") and candidate.get("overview") and candidate.get("vote_average", 0) > 0:
                 hero_movie = candidate
                 break
         if not hero_movie:
             hero_movie = filtered["items"][0]
 
     if hero_movie:
-        hero_movie["poster_url"] = tmdb.get_poster_url(hero_movie.get("poster_path"))
         tmdb_info = tmdb.fetch_movie_details(hero_movie["movie_id"])
         if tmdb_info:
             for k, v in tmdb_info.items():
                 if v:
                     hero_movie[k] = v
-
-    for item in filtered["items"]:
-        item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
 
     watchlist = request.session.get("watchlist", [])
 
@@ -61,7 +68,7 @@ def movie_grid_partial(request):
     )
 
     for item in filtered["items"]:
-        item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
+        prepare_movie_item(item)
 
     context = {
         "movies": filtered["items"],
@@ -78,7 +85,7 @@ def search_live_partial(request):
     query = request.GET.get("q", "")
     results = services.search_movies(query, limit=8)
     for item in results:
-        item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
+        prepare_movie_item(item)
 
     context = {
         "query": query,
@@ -92,7 +99,7 @@ def movie_modal_partial(request, movie_id):
     if not movie:
         return HttpResponse("Film nie został znaleziony.", status=404)
 
-    movie["poster_url"] = tmdb.get_poster_url(movie.get("poster_path"))
+    prepare_movie_item(movie)
     tmdb_info = tmdb.fetch_movie_details(movie_id)
     if tmdb_info:
         for k, v in tmdb_info.items():
@@ -101,7 +108,7 @@ def movie_modal_partial(request, movie_id):
 
     recommendations = services.get_recommendations(movie_id, top_n=8)
     for rec in recommendations:
-        rec["poster_url"] = tmdb.get_poster_url(rec.get("poster_path"))
+        prepare_movie_item(rec)
 
     watchlist = request.session.get("watchlist", [])
     is_in_watchlist = int(movie_id) in watchlist
@@ -122,7 +129,7 @@ def roulette(request):
     if request.GET.get("spin") == "true":
         selected_movie = services.get_random_movie(genre=genre)
         if selected_movie:
-            selected_movie["poster_url"] = tmdb.get_poster_url(selected_movie.get("poster_path"))
+            prepare_movie_item(selected_movie)
             tmdb_info = tmdb.fetch_movie_details(selected_movie["movie_id"])
             if tmdb_info:
                 for k, v in tmdb_info.items():
@@ -143,7 +150,7 @@ def watchlist(request):
     for mid in watchlist_ids:
         m = services.get_movie_by_id(mid)
         if m:
-            m["poster_url"] = tmdb.get_poster_url(m.get("poster_path"))
+            prepare_movie_item(m)
             movies.append(m)
 
     context = {
