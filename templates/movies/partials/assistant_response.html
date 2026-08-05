@@ -1,0 +1,42 @@
+{% load i18n_tags %}
+<!-- User message bubble -->
+<div class="flex items-start justify-end gap-3">
+    <div class="bg-brand-gold text-black font-semibold p-4 rounded-2xl max-w-xl text-sm shadow-md">
+        {{ user_message }}
+    </div>
+</div>
+
+<!-- Bot response bubble -->
+<div class="flex items-start gap-3">
+    <div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-sm shrink-0">
+        🤖
+    </div>
+    <div class="glass-card p-4 rounded-2xl max-w-2xl text-sm text-gray-200 space-y-4">
+        <p class="text-xs text-gray-400">
+            {{ "processed_query"|t:current_lang }}
+            {% if parsed.genre != "All" %}<span class="bg-white/10 text-white px-2 py-0.5 rounded text-[11px] font-bold">{{ parsed.genre }}</span>{% endif %}
+            {% if parsed.year_min %}<span class="bg-white/10 text-white px-2 py-0.5 rounded text-[11px] font-bold">{{ "from"|t:current_lang }} {{ parsed.year_min }}</span>{% endif %}
+            {% if parsed.year_max %}<span class="bg-white/10 text-white px-2 py-0.5 rounded text-[11px] font-bold">{{ "to"|t:current_lang }} {{ parsed.year_max }}</span>{% endif %}
+            {% if parsed.vote_min %}<span class="bg-white/10 text-white px-2 py-0.5 rounded text-[11px] font-bold">{{ "min_rating"|t:current_lang }}: {{ parsed.vote_min }}</span>{% endif %}
+        </p>
+
+        {% if movies %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {% for movie in movies %}
+            <div class="glass-panel p-2 rounded-xl overflow-hidden group cursor-pointer"
+                 hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
+                 hx-target="#movie-modal-container">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full aspect-[2/3] object-cover rounded-lg group-hover:scale-105 transition-transform">
+                <h4 class="font-bold text-xs text-white mt-2 group-hover:text-emerald-400 truncate">{{ movie.title }}</h4>
+                <div class="flex items-center justify-between text-[10px] text-gray-400 mt-0.5">
+                    <span class="text-brand-gold font-bold">⭐ {{ movie.vote_average }}</span>
+                    <span>{{ movie.year }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-gray-400">{{ "no_movies_found"|t:current_lang }}</p>
+        {% endif %}
+    </div>
+</div>

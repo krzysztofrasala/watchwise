@@ -13,6 +13,7 @@ DATA_DIR = BASE_DIR / 'data'
 MOVIE_DICT_FILE = DATA_DIR / 'movie_dict.pkl'
 NEIGHBORS_FILE = DATA_DIR / 'neighbors.pkl'
 MOVIES_CSV_FILE = DATA_DIR / 'movies.csv'
+VECTORS_FILE = DATA_DIR / 'vectors.npz'
 
 
 def parse_genres(genres_str) -> list[str]:
@@ -41,13 +42,13 @@ def load_dataset():
     raw_df = raw_df.rename(columns={"id": "movie_id"})
 
     cols_to_merge = ["movie_id", "year", "genres_list"]
-    for col in ["poster_path", "backdrop_path", "vote_average", "runtime", "overview", "tagline"]:
+    for col in ["poster_path", "backdrop_path", "vote_average", "runtime", "overview", "tagline", "original_language"]:
         if col in raw_df.columns:
             cols_to_merge.append(col)
 
     merged = movies_df.merge(raw_df[cols_to_merge], on="movie_id", how="left")
 
-    for col in ["poster_path", "backdrop_path", "overview", "tagline"]:
+    for col in ["poster_path", "backdrop_path", "overview", "tagline", "original_language"]:
         if col not in merged.columns:
             merged[col] = ""
         else:
@@ -66,6 +67,22 @@ def load_dataset():
     merged["year"] = merged["year"].fillna(0).astype(int)
 
     return merged, neighbors
+
+
+@lru_cache(maxsize=1)
+def load_dataset_with_vectors():
+    """Load movies dataframe along with sentence transformer dense embeddings vectors."""
+    movies_df, _ = load_dataset()
+    vectors = None
+    is_dense = True
+
+    if VECTORS_FILE.exists():
+        npz = np.load(VECTORS_FILE)
+        if "vectors" in npz:
+            vectors = npz["vectors"]
+            is_dense = True
+
+    return movies_df, vectors, is_dense
 
 
 def get_all_movies():
@@ -106,7 +123,9 @@ def get_recommendations(movie_id: int, top_n: int = 10):
     for neighbor_idx, score in zip(neighbor_indices, neighbor_scores):
         if neighbor_idx < n_movies:
             rec_row = movies_df.iloc[neighbor_idx].to_dict()
-            rec_row["similarity"] = int(round(float(score) * 100))
+            rec_row["match_score"] = int(round(float(score) * 100))
+            rec_row["similarity"] = rec_row["match_score"]
+            rec_row["match_reason"] = "Wysokie podobieństwo tematyczne"
             recommendations.append(rec_row)
 
     return recommendations
@@ -126,6 +145,7 @@ def filter_movies(
     year_min: int = None,
     year_max: int = None,
     vote_min: float = None,
+    language: str = None,
     sort_by: str = "popularity",
     page: int = 1,
     per_page: int = 24,
@@ -143,6 +163,9 @@ def filter_movies(
 
     if vote_min:
         df = df[df["vote_average"] >= float(vote_min)]
+
+    if language:
+        df = df[df["original_language"].str.lower() == language.lower()]
 
     if sort_by == "vote_desc":
         df = df.sort_values(by="vote_average", ascending=False)

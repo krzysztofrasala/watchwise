@@ -1,3 +1,4 @@
+{% load i18n_tags %}
 <div class="space-y-6">
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {% for movie in movies %}
@@ -39,7 +40,7 @@
         {% empty %}
         <div class="col-span-full py-12 text-center text-gray-400 space-y-3">
             <i data-lucide="film" class="w-12 h-12 mx-auto text-gray-600"></i>
-            <p class="text-sm font-medium">Brak filmów spełniających wybrane kryteria.</p>
+            <p class="text-sm font-medium">{{ "no_movies_found"|t:current_lang }}</p>
         </div>
         {% endfor %}
     </div>
@@ -53,12 +54,12 @@
             hx-target="#movie-grid-container"
             class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-brand-gold hover:text-black transition-all"
         >
-            ← Poprzednia
+            {{ "prev_page"|t:current_lang }}
         </button>
         {% endif %}
 
         <span class="text-xs text-gray-400 font-semibold px-3 py-2">
-            Strona {{ page }} z {{ total_pages }}
+            {{ "page"|t:current_lang }} {{ page }} {{ "of"|t:current_lang }} {{ total_pages }}
         </span>
 
         {% if page < total_pages %}
@@ -67,7 +68,7 @@
             hx-target="#movie-grid-container"
             class="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white hover:bg-brand-gold hover:text-black transition-all"
         >
-            Następna →
+            {{ "next_page"|t:current_lang }}
         </button>
         {% endif %}
     </div>

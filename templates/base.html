@@ -1,9 +1,10 @@
+{% load i18n_tags %}
 <!DOCTYPE html>
-<html lang="pl" class="dark">
+<html lang="{% if current_lang == 'EN' %}en{% else %}pl{% endif %}" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CineScope — Odkrywaj Filmy i Rekomendacje{% endblock %}</title>
+    <title>{% block title %}CineScope 2.0 — {{ "app_tagline"|t:current_lang }}{% endblock %}</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,6 +43,9 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Chart.js CDN for Taste DNA -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -52,7 +56,7 @@
             font-family: 'Outfit', sans-serif;
         }
         .glass-panel {
-            background: rgba(20, 22, 29, 0.75);
+            background: rgba(20, 22, 29, 0.85);
             backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
@@ -67,7 +71,6 @@
             border-color: rgba(245, 197, 24, 0.4);
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 197, 24, 0.15);
         }
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -88,30 +91,61 @@
 
     <!-- Header Navigation -->
     <header class="sticky top-0 z-40 glass-panel border-b border-white/10 px-4 md:px-8 py-3 transition-all duration-300">
-        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             
-            <!-- Logo -->
-            <a href="{% url 'index' %}" class="flex items-center gap-2 group">
-                <div class="w-10 h-10 rounded-xl bg-brand-gold flex items-center justify-center text-black font-extrabold text-xl shadow-lg shadow-brand-gold/20 group-hover:scale-105 transition-transform">
-                    🎬
+            <div class="flex items-center justify-between w-full md:w-auto gap-4">
+                <!-- Logo -->
+                <a href="{% url 'index' %}" class="flex items-center gap-2 group">
+                    <div class="w-10 h-10 rounded-xl bg-brand-gold flex items-center justify-center text-black font-extrabold text-xl shadow-lg shadow-brand-gold/20 group-hover:scale-105 transition-transform">
+                        🎬
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-display text-xl font-black tracking-tight text-white group-hover:text-brand-gold transition-colors">
+                            CineScope
+                        </span>
+                        <span class="text-[10px] text-gray-400 -mt-1 tracking-wider uppercase font-semibold">
+                            Django Edition
+                        </span>
+                    </div>
+                </a>
+
+                <!-- Profile & Language Switchers -->
+                <div class="relative flex items-center gap-3">
+                    <!-- Language Switcher Dropdown -->
+                    <form action="{% url 'switch_language' %}" method="POST" class="flex items-center gap-1">
+                        {% csrf_token %}
+                        <select name="lang" onchange="this.form.submit()" class="bg-white/10 border border-white/10 text-xs text-white font-bold rounded-lg px-2 py-1 focus:outline-none focus:border-brand-gold">
+                            <option value="PL" {% if current_lang == 'PL' %}selected{% endif %} class="bg-gray-900 text-white">🇵🇱 PL</option>
+                            <option value="EN" {% if current_lang == 'EN' %}selected{% endif %} class="bg-gray-900 text-white">🇬🇧 EN</option>
+                            <option value="DE" {% if current_lang == 'DE' %}selected{% endif %} class="bg-gray-900 text-white">🇩🇪 DE</option>
+                            <option value="ES" {% if current_lang == 'ES' %}selected{% endif %} class="bg-gray-900 text-white">🇪🇸 ES</option>
+                            <option value="FR" {% if current_lang == 'FR' %}selected{% endif %} class="bg-gray-900 text-white">🇫🇷 FR</option>
+                            <option value="IT" {% if current_lang == 'IT' %}selected{% endif %} class="bg-gray-900 text-white">🇮🇹 IT</option>
+                        </select>
+                    </form>
+
+                    <!-- Profile Switcher Form -->
+                    <form action="{% url 'switch_profile' %}" method="POST" class="flex items-center gap-1.5">
+                        {% csrf_token %}
+                        <i data-lucide="user" class="w-4 h-4 text-brand-gold"></i>
+                        <select name="profile_name" onchange="this.form.submit()" class="bg-white/10 border border-white/10 text-xs text-white rounded-lg px-2 py-1 focus:outline-none focus:border-brand-gold">
+                            {% for prof in all_profiles_display %}
+                                <option value="{{ prof.raw }}" {% if prof.raw == active_profile %}selected{% endif %} class="bg-gray-900 text-white">
+                                    👤 {{ prof.display }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </form>
                 </div>
-                <div class="flex flex-col">
-                    <span class="font-display text-xl font-black tracking-tight text-white group-hover:text-brand-gold transition-colors">
-                        CineScope
-                    </span>
-                    <span class="text-[10px] text-gray-400 -mt-1 tracking-wider uppercase font-semibold">
-                        Recommender
-                    </span>
-                </div>
-            </a>
+            </div>
 
             <!-- Live Search Bar -->
-            <div class="relative flex-1 max-w-md mx-4">
+            <div class="relative flex-1 max-w-md w-full">
                 <div class="relative">
                     <input 
                         type="text" 
                         name="q" 
-                        placeholder="Szukaj filmu po tytule..." 
+                        placeholder="{{ 'search_placeholder'|t:current_lang }}" 
                         class="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all"
                         hx-get="{% url 'search_live_partial' %}"
                         hx-trigger="keyup changed delay:300ms"
@@ -124,19 +158,35 @@
             </div>
 
             <!-- Nav Links -->
-            <nav class="flex items-center gap-2 md:gap-4">
-                <a href="{% url 'index' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
-                    <i data-lucide="compass" class="w-4 h-4 text-brand-gold"></i>
-                    <span class="hidden sm:inline">Odkrywaj</span>
+            <nav class="flex items-center gap-1.5 md:gap-2 flex-wrap justify-center">
+                <a href="{% url 'index' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="compass" class="w-3.5 h-3.5 text-brand-gold"></i>
+                    <span>{{ "nav_home"|t:current_lang }}</span>
                 </a>
-                <a href="{% url 'roulette' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
-                    <i data-lucide="dices" class="w-4 h-4 text-purple-400"></i>
-                    <span class="hidden sm:inline">Ruletka</span>
+                <a href="{% url 'discover' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="sliders" class="w-3.5 h-3.5 text-blue-400"></i>
+                    <span>{{ "nav_discover_pro"|t:current_lang }}</span>
                 </a>
-                <a href="{% url 'watchlist' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all relative">
-                    <i data-lucide="bookmark" class="w-4 h-4 text-emerald-400"></i>
-                    <span class="hidden sm:inline">Watchlista</span>
-                    <span id="watchlist-badge" class="bg-brand-gold text-black text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+                <a href="{% url 'assistant' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>{{ "nav_assistant"|t:current_lang }}</span>
+                </a>
+                <a href="{% url 'taste_dna' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="dna" class="w-3.5 h-3.5 text-pink-400"></i>
+                    <span>{{ "nav_taste_dna"|t:current_lang }}</span>
+                </a>
+                <a href="{% url 'compare' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="users" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>{{ "nav_matchmaker"|t:current_lang }}</span>
+                </a>
+                <a href="{% url 'roulette' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="dices" class="w-3.5 h-3.5 text-purple-400"></i>
+                    <span>{{ "nav_roulette"|t:current_lang }}</span>
+                </a>
+                <a href="{% url 'watchlist' %}" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all relative">
+                    <i data-lucide="bookmark" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span>{{ "nav_watchlist"|t:current_lang }}</span>
+                    <span id="watchlist-badge" class="bg-brand-gold text-black text-[10px] font-bold px-1.5 py-0.2 rounded-full">
                         {{ watchlist_count|default:0 }}
                     </span>
                 </a>
@@ -153,11 +203,11 @@
     <footer class="border-t border-white/10 py-8 px-4 text-center text-xs text-gray-500">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-2">
-                <span class="font-display font-bold text-white text-base">CineScope Django</span>
-                <span>• Zbudowane w Pythonie & Django z HTMX</span>
+                <span class="font-display font-bold text-white text-base">CineScope 2.0</span>
+                <span>• {{ "app_tagline"|t:current_lang }}</span>
             </div>
             <div>
-                Dane o filmach & zwiastuny z <a href="https://www.themoviedb.org" target="_blank" class="text-brand-gold hover:underline">TMDB API</a>
+                Data & trailers via <a href="https://www.themoviedb.org" target="_blank" class="text-brand-gold hover:underline">TMDB API</a>
             </div>
         </div>
     </footer>
