@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from . import tmdb
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
@@ -131,13 +132,36 @@ def get_recommendations(movie_id: int, top_n: int = 10):
     return recommendations
 
 
-def search_movies(query: str, limit: int = 12):
+def search_movies(query: str, lang: str = "PL", limit: int = 12):
     if not query or len(query.strip()) < 2:
         return []
     movies_df, _ = load_dataset()
     q = query.strip().lower()
     matches = movies_df[movies_df["title"].str.lower().str.contains(q, na=False)]
-    return matches.head(limit).to_dict(orient="records")
+    local_results = matches.head(limit).to_dict(orient="records")
+    for r in local_results:
+        r["media_badge"] = "🎬 Film"
+        r["media_type"] = "movie"
+
+    # Also search TMDB for live movies and TV series
+    tmdb_results = tmdb.search_tmdb_multi(query, lang=lang, limit=limit)
+
+    seen_ids = set()
+    combined = []
+
+    for item in tmdb_results:
+        mid = item["movie_id"]
+        if mid not in seen_ids:
+            seen_ids.add(mid)
+            combined.append(item)
+
+    for item in local_results:
+        mid = item["movie_id"]
+        if mid not in seen_ids:
+            seen_ids.add(mid)
+            combined.append(item)
+
+    return combined[:limit]
 
 
 def filter_movies(

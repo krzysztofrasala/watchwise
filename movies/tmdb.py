@@ -1,5 +1,7 @@
+from __future__ import annotations
 import os
 import requests
+from urllib.parse import quote
 from functools import lru_cache
 
 BASE_URL = "https://api.themoviedb.org/3"
@@ -39,27 +41,50 @@ def get_backdrop_url(backdrop_path: str, size: str = "w1280") -> str:
 
 def get_profile_url(profile_path: str, size: str = "w185") -> str:
     if not profile_path or str(profile_path) in ["nan", "None", ""]:
-        return "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop"
+        return "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200&auto=format&fit=crop"
     if profile_path.startswith("http"):
         return profile_path
     path = profile_path if profile_path.startswith("/") else f"/{profile_path}"
     return f"{IMAGE_BASE_URL}/{size}{path}"
 
 def get_provider_logo_url(logo_path: str, size: str = "w92") -> str:
-    if not logo_path:
+    if not logo_path or str(logo_path) in ["nan", "None", ""]:
         return ""
+    if logo_path.startswith("http"):
+        return logo_path
     path = logo_path if logo_path.startswith("/") else f"/{logo_path}"
     return f"{IMAGE_BASE_URL}/{size}{path}"
 
 
-@lru_cache(maxsize=300)
-def fetch_movie_details(movie_id: int, lang: str = "PL"):
-    """Fetch extended movie details from TMDB including videos (trailers), cast, and VOD providers."""
-    api_key = get_api_key()
-    if not api_key:
-        return None
+def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: str) -> str:
+    title_q = quote(movie_title or "")
+    name_lower = (provider_name or "").lower()
 
-    lang_code = lang.upper().strip()
+    if "netflix" in name_lower or provider_id == 8:
+        return f"https://www.netflix.com/search?q={title_q}"
+    elif "disney" in name_lower or provider_id == 337:
+        return f"https://www.disneyplus.com/search?q={title_q}"
+    elif "prime" in name_lower or "amazon" in name_lower or provider_id == 119:
+        return f"https://www.primevideo.com/search?phrase={title_q}"
+    elif "max" in name_lower or "hbo" in name_lower or provider_id in [1899, 384]:
+        return f"https://www.max.com/search?q={title_q}"
+    elif "apple" in name_lower or provider_id == 350:
+        return f"https://tv.apple.com/search?term={title_q}"
+    elif "skyshowtime" in name_lower or provider_id == 1773:
+        return f"https://www.skyshowtime.com/search?q={title_q}"
+    elif "canal" in name_lower:
+        return f"https://www.canalplus.com/pl/szukaj/{title_q}"
+    elif "player" in name_lower:
+        return f"https://player.pl/szukaj?q={title_q}"
+    elif "polsat" in name_lower:
+        return f"https://polsatboxgo.pl/szukaj?phrase={title_q}"
+    else:
+        return f"https://www.google.com/search?q={quote((movie_title or '') + ' ' + (provider_name or ''))}"
+
+
+@lru_cache(maxsize=300)
+def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
+    api_key = get_api_key()
     lang_map = {
         "PL": "pl-PL",
         "EN": "en-US",
@@ -68,6 +93,7 @@ def fetch_movie_details(movie_id: int, lang: str = "PL"):
         "FR": "fr-FR",
         "IT": "it-IT",
     }
+    lang_code = lang.upper() if lang else "PL"
     tmdb_lang = lang_map.get(lang_code, "pl-PL")
     region_code = lang_code if lang_code in ["PL", "US", "DE", "ES", "FR", "IT"] else "PL"
 
@@ -79,14 +105,38 @@ def fetch_movie_details(movie_id: int, lang: str = "PL"):
             "language": tmdb_lang
         }
         res = requests.get(url, params=params, timeout=4)
+        is_tv = False
+
+        # If movie not found, try TV show endpoint
+        if res.status_code == 404:
+            url = f"{BASE_URL}/tv/{movie_id}"
+            res = requests.get(url, params=params, timeout=4)
+            is_tv = True
+
         if res.status_code == 200:
             data = res.json()
             trailer_key = None
             videos = data.get("videos", {}).get("results", [])
+            
+            # Find trailer or teaser in localized videos
             for v in videos:
                 if v.get("site") == "YouTube" and v.get("type") in ["Trailer", "Teaser"]:
                     trailer_key = v.get("key")
                     break
+            
+            # If no localized trailer, fallback to English videos
+            if not trailer_key and tmdb_lang != "en-US":
+                try:
+                    endpoint = "tv" if is_tv else "movie"
+                    v_res = requests.get(f"{BASE_URL}/{endpoint}/{movie_id}/videos", params={"api_key": api_key, "language": "en-US"}, timeout=3)
+                    if v_res.status_code == 200:
+                        en_videos = v_res.json().get("results", [])
+                        for v in en_videos:
+                            if v.get("site") == "YouTube" and v.get("type") in ["Trailer", "Teaser"]:
+                                trailer_key = v.get("key")
+                                break
+                except Exception:
+                    pass
 
             cast_raw = data.get("credits", {}).get("cast", [])[:8]
             cast_list = []
@@ -97,32 +147,132 @@ def fetch_movie_details(movie_id: int, lang: str = "PL"):
                     "profile_url": get_profile_url(c.get("profile_path"))
                 })
 
-            director = next((c.get("name") for c in data.get("credits", {}).get("crew", []) if c.get("job") == "Director"), None)
+            if is_tv:
+                director = next((c.get("name") for c in data.get("created_by", []) if c.get("name")), None)
+                if not director:
+                    director = next((c.get("name") for c in data.get("credits", {}).get("crew", []) if c.get("job") in ["Executive Producer", "Director"]), None)
+            else:
+                director = next((c.get("name") for c in data.get("credits", {}).get("crew", []) if c.get("job") == "Director"), None)
 
             # Extract VOD providers for region (fallback to PL/US)
             watch_results = data.get("watch/providers", {}).get("results", {})
             reg_providers = watch_results.get(region_code, {}) or watch_results.get("PL", {}) or watch_results.get("US", {})
+            
+            movie_title = data.get("title") or data.get("name") or data.get("original_title") or data.get("original_name") or ""
+            justwatch_url = reg_providers.get("link")
+            if not justwatch_url and movie_title:
+                justwatch_url = f"https://www.justwatch.com/{region_code.lower()}/search?q={quote(movie_title)}"
+
             flatrate = reg_providers.get("flatrate", [])
+            rent = reg_providers.get("rent", [])
+            buy = reg_providers.get("buy", [])
             
             vod_list = []
-            for p in flatrate:
-                vod_list.append({
-                    "id": p.get("provider_id"),
-                    "name": p.get("provider_name"),
-                    "logo_url": get_provider_logo_url(p.get("logo_path"))
-                })
+            seen_ids = set()
+            for p in (flatrate + rent + buy):
+                pid = p.get("provider_id")
+                pname = p.get("provider_name")
+                if pid not in seen_ids:
+                    seen_ids.add(pid)
+                    direct_url = get_provider_direct_url(pname, pid, movie_title)
+                    vod_list.append({
+                        "id": pid,
+                        "name": pname,
+                        "logo_url": get_provider_logo_url(p.get("logo_path")),
+                        "direct_url": direct_url,
+                        "justwatch_url": justwatch_url
+                    })
 
-            return {
+            res_dict = {
+                "title": movie_title,
                 "tagline": data.get("tagline", ""),
                 "overview": data.get("overview", "") or data.get("tagline", ""),
                 "trailer_key": trailer_key,
+                "justwatch_url": justwatch_url,
                 "cast": [c["name"] for c in cast_list[:5]],
                 "cast_details": cast_list,
                 "director": director,
                 "backdrop_url": f"{IMAGE_BASE_URL}/w1280{data['backdrop_path']}" if data.get("backdrop_path") else None,
                 "vote_count": data.get("vote_count", 0),
+                "vote_average": round(float(data.get("vote_average", 0.0)), 1),
                 "vod_providers": vod_list,
+                "is_tv": is_tv,
+                "media_type": "tv" if is_tv else "movie",
             }
+
+            if is_tv:
+                seasons = data.get("number_of_seasons", 0)
+                episodes = data.get("number_of_episodes", 0)
+                first_air = data.get("first_air_date") or ""
+                res_dict["year"] = int(first_air[:4]) if first_air[:4].isdigit() else 0
+                res_dict["seasons"] = seasons
+                res_dict["episodes"] = episodes
+                if lang_code == "PL":
+                    res_dict["tv_info"] = f"{seasons} sez. • {episodes} odc."
+                else:
+                    res_dict["tv_info"] = f"{seasons} seasons • {episodes} eps."
+
+            return res_dict
     except Exception:
         pass
     return None
+
+
+def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict]:
+    """Search movies and TV series via TMDB multi search API."""
+    if not query or len(query.strip()) < 2:
+        return []
+    api_key = get_api_key()
+    lang_map = {
+        "PL": "pl-PL",
+        "EN": "en-US",
+        "DE": "de-DE",
+        "ES": "es-ES",
+        "FR": "fr-FR",
+        "IT": "it-IT",
+    }
+    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+
+    try:
+        url = f"{BASE_URL}/search/multi"
+        params = {
+            "api_key": api_key,
+            "query": query.strip(),
+            "language": tmdb_lang,
+            "include_adult": False
+        }
+        res = requests.get(url, params=params, timeout=4)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            items = []
+            for item in results:
+                m_type = item.get("media_type")
+                if m_type not in ["movie", "tv"]:
+                    continue
+
+                movie_id = item.get("id")
+                title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name")
+                if not title:
+                    continue
+
+                date_str = item.get("release_date") or item.get("first_air_date") or ""
+                year = int(date_str[:4]) if date_str[:4].isdigit() else None
+
+                items.append({
+                    "movie_id": movie_id,
+                    "title": title,
+                    "media_type": m_type,
+                    "is_tv": (m_type == "tv"),
+                    "media_badge": "📺 Serial" if m_type == "tv" else "🎬 Film",
+                    "year": year,
+                    "poster_url": get_poster_url(item.get("poster_path")),
+                    "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
+                    "vote_average": round(float(item.get("vote_average", 0.0)), 1),
+                    "overview": item.get("overview", ""),
+                })
+                if len(items) >= limit:
+                    break
+            return items
+    except Exception:
+        pass
+    return []
