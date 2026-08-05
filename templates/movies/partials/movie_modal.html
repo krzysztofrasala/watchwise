@@ -1,0 +1,149 @@
+<div id="movie-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto bg-black/80 backdrop-blur-md animate-fade-in">
+    <!-- Backdrop Close Button Trigger -->
+    <div class="fixed inset-0" onclick="document.getElementById('movie-modal').remove()"></div>
+
+    <!-- Modal Content Window -->
+    <div class="relative w-full max-w-4xl glass-panel rounded-3xl overflow-hidden shadow-2xl border border-white/15 my-auto z-10 space-y-0">
+        
+        <!-- Close Button -->
+        <button 
+            onclick="document.getElementById('movie-modal').remove()" 
+            class="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-black/60 text-gray-300 hover:text-white hover:bg-black/90 flex items-center justify-center backdrop-blur-md border border-white/10 transition-all"
+        >
+            <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Media Header (YouTube Trailer or Backdrop/Poster) -->
+        <div class="relative w-full aspect-video max-h-[420px] bg-black overflow-hidden">
+            {% if movie.trailer_key %}
+            <iframe 
+                src="https://www.youtube-nocookie.com/embed/{{ movie.trailer_key }}?autoplay=1&mute=0&rel=0" 
+                title="{{ movie.title }} zwiastun" 
+                class="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen
+            ></iframe>
+            {% elif movie.backdrop_path %}
+            <img src="{{ movie.backdrop_path }}" alt="{{ movie.title }}" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark via-transparent to-transparent"></div>
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-900 to-black p-8">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="h-full object-contain rounded-xl shadow-2xl">
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Body Details -->
+        <div class="p-6 md:p-8 space-y-6 max-h-[50vh] overflow-y-auto">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <span class="flex items-center gap-1 text-brand-gold font-bold text-sm bg-brand-gold/10 px-2.5 py-0.5 rounded-md border border-brand-gold/20">
+                            <i data-lucide="star" class="w-4 h-4 fill-brand-gold"></i> {{ movie.vote_average }} / 10
+                        </span>
+                        {% if movie.year %}
+                        <span class="text-xs text-gray-400 font-semibold">{{ movie.year }}</span>
+                        {% endif %}
+                        {% if movie.runtime %}
+                        <span class="text-xs text-gray-400 font-semibold">{{ movie.runtime }} min</span>
+                        {% endif %}
+                    </div>
+                    <h2 class="text-2xl md:text-3xl font-black text-white tracking-tight">
+                        {{ movie.title }}
+                    </h2>
+                </div>
+
+                <!-- Watchlist Toggle Button -->
+                <button 
+                    id="watchlist-toggle-btn"
+                    hx-post="{% url 'toggle_watchlist' movie.movie_id %}"
+                    hx-swap="none"
+                    onclick="toggleWatchlistBtn(this)"
+                    class="px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border
+                    {% if is_in_watchlist %}
+                    bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30
+                    {% else %}
+                    bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold
+                    {% endif %}"
+                >
+                    <i data-lucide="bookmark" class="w-4 h-4"></i>
+                    <span id="watchlist-btn-text">
+                        {% if is_in_watchlist %}Zapisano na Watchliście{% else %}+ Dodaj do Watchlisty{% endif %}
+                    </span>
+                </button>
+            </div>
+
+            <!-- Overview & Credits -->
+            <div class="space-y-3">
+                {% if movie.tagline %}
+                <p class="text-sm text-brand-gold italic">"{{ movie.tagline }}"</p>
+                {% endif %}
+
+                <p class="text-sm text-gray-300 leading-relaxed">
+                    {{ movie.overview|default:"Brak opisu dla tego filmu." }}
+                </p>
+
+                {% if movie.cast or movie.director %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs text-gray-400">
+                    {% if movie.director %}
+                    <div><span class="text-gray-500 font-semibold">Reżyseria:</span> <span class="text-gray-200">{{ movie.director }}</span></div>
+                    {% endif %}
+                    {% if movie.cast %}
+                    <div><span class="text-gray-500 font-semibold">Obsada:</span> <span class="text-gray-200">{{ movie.cast|join:", " }}</span></div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- AI Recommendations Section: "Filmy w podobnym klimacie" -->
+            {% if recommendations %}
+            <div class="pt-6 border-t border-white/10 space-y-4">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-brand-gold"></i> Filmy w podobnym klimacie (Rekomendacje AI)
+                </h3>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {% for rec in recommendations %}
+                    <div 
+                        class="glass-card rounded-xl p-2 cursor-pointer space-y-1.5 group"
+                        hx-get="{% url 'movie_modal_partial' rec.movie_id %}"
+                        hx-target="#movie-modal-container"
+                    >
+                        <div class="aspect-[2/3] w-full overflow-hidden rounded-lg relative bg-gray-900">
+                            <img src="{{ rec.poster_url }}" alt="{{ rec.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform">
+                            
+                            <!-- Similarity Match Badge -->
+                            <div class="absolute bottom-1 right-1 bg-brand-gold text-black text-[10px] font-black px-1.5 py-0.5 rounded shadow">
+                                {{ rec.similarity }}% zgodności
+                            </div>
+                        </div>
+                        <h4 class="text-xs font-bold text-white truncate group-hover:text-brand-gold transition-colors">
+                            {{ rec.title }}
+                        </h4>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+    function toggleWatchlistBtn(btn) {
+        const textSpan = document.getElementById('watchlist-btn-text');
+        const badge = document.getElementById('watchlist-badge');
+        let count = parseInt(badge.innerText || '0');
+
+        if (textSpan.innerText.includes('Dodaj')) {
+            textSpan.innerText = 'Zapisano na Watchliście';
+            btn.className = 'px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30';
+            badge.innerText = count + 1;
+        } else {
+            textSpan.innerText = '+ Dodaj do Watchlisty';
+            btn.className = 'px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold';
+            badge.innerText = Math.max(0, count - 1);
+        }
+    }
+</script>

@@ -1,0 +1,26 @@
+{% if results %}
+<div class="glass-panel rounded-2xl p-2 shadow-2xl border border-white/15 max-h-96 overflow-y-auto space-y-1">
+    {% for item in results %}
+    <div 
+        class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors"
+        hx-get="{% url 'movie_modal_partial' item.movie_id %}"
+        hx-target="#movie-modal-container"
+    >
+        <img src="{{ item.poster_url }}" alt="{{ item.title }}" class="w-10 h-14 object-cover rounded-lg shrink-0">
+        <div class="flex-1 min-w-0">
+            <h4 class="text-xs font-bold text-white truncate">{{ item.title }}</h4>
+            <div class="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
+                <span>{{ item.year|default:"" }}</span>
+                <span class="flex items-center gap-0.5 text-brand-gold font-bold">
+                    <i data-lucide="star" class="w-3 h-3 fill-brand-gold"></i> {{ item.vote_average }}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif query|length >= 2 %}
+<div class="glass-panel rounded-2xl p-4 text-center text-xs text-gray-400 shadow-2xl">
+    Nie znaleziono filmu o tytule "{{ query }}"
+</div>
+{% endif %}

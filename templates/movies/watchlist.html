@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="space-y-6 py-4">
+    <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div>
+            <h1 class="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                <i data-lucide="bookmark" class="w-8 h-8 text-emerald-400"></i> Moja Watchlista
+            </h1>
+            <p class="text-xs text-gray-400">Zapisane filmy na później</p>
+        </div>
+        <span class="bg-emerald-500/20 text-emerald-400 font-bold px-3 py-1 rounded-full text-xs border border-emerald-500/30">
+            {{ watchlist_count }} filmów
+        </span>
+    </div>
+
+    {% if movies %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {% for movie in movies %}
+        <div 
+            class="glass-card rounded-2xl overflow-hidden cursor-pointer flex flex-col justify-between group relative"
+            hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
+            hx-target="#movie-modal-container"
+        >
+            <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[11px] font-extrabold px-2 py-0.5 rounded-md border border-brand-gold/30 flex items-center gap-1 shadow-md">
+                    <i data-lucide="star" class="w-3 h-3 fill-brand-gold"></i> {{ movie.vote_average }}
+                </div>
+            </div>
+
+            <div class="p-3 space-y-1">
+                <h3 class="font-bold text-xs md:text-sm text-white line-clamp-1 group-hover:text-brand-gold transition-colors">
+                    {{ movie.title }}
+                </h3>
+                <div class="flex items-center justify-between text-[11px] text-gray-400">
+                    <span>{{ movie.year|default:"" }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="py-16 text-center text-gray-400 space-y-4 glass-panel rounded-3xl">
+        <i data-lucide="bookmark" class="w-12 h-12 mx-auto text-gray-600"></i>
+        <h3 class="text-base font-bold text-white">Twoja Watchlista jest pusta</h3>
+        <p class="text-xs text-gray-400 max-w-sm mx-auto">
+            Przeglądaj filmy w sekcji Odkrywaj i kliknij "+ Dodaj do Watchlisty" przy wybranym filmie!
+        </p>
+        <a href="{% url 'index' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-gold text-black font-bold text-xs shadow-lg shadow-brand-gold/20 hover:scale-105 transition-transform">
+            Przeglądaj Filmy
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

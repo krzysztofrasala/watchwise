@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CineScope — Odkrywaj Filmy i Rekomendacje{% endblock %}</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            gold: '#F5C518',
+                            goldHover: '#e0b20f',
+                            dark: '#0c0d10',
+                            card: '#14161d',
+                            cardBorder: 'rgba(255, 255, 255, 0.08)',
+                            accent: '#e50914',
+                        }
+                    },
+                    fontFamily: {
+                        outfit: ['Outfit', 'sans-serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- HTMX CDN -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0c0d10;
+            color: #f3f4f6;
+        }
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(20, 22, 29, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(26, 29, 38, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            transform: translateY(-6px) scale(1.02);
+            border-color: rgba(245, 197, 24, 0.4);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 197, 24, 0.15);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0c0d10;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #262936;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #F5C518;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-brand-gold selection:text-black">
+
+    <!-- Header Navigation -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-white/10 px-4 md:px-8 py-3 transition-all duration-300">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            
+            <!-- Logo -->
+            <a href="{% url 'index' %}" class="flex items-center gap-2 group">
+                <div class="w-10 h-10 rounded-xl bg-brand-gold flex items-center justify-center text-black font-extrabold text-xl shadow-lg shadow-brand-gold/20 group-hover:scale-105 transition-transform">
+                    🎬
+                </div>
+                <div class="flex flex-col">
+                    <span class="font-display text-xl font-black tracking-tight text-white group-hover:text-brand-gold transition-colors">
+                        CineScope
+                    </span>
+                    <span class="text-[10px] text-gray-400 -mt-1 tracking-wider uppercase font-semibold">
+                        Recommender
+                    </span>
+                </div>
+            </a>
+
+            <!-- Live Search Bar -->
+            <div class="relative flex-1 max-w-md mx-4">
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        name="q" 
+                        placeholder="Szukaj filmu po tytule..." 
+                        class="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all"
+                        hx-get="{% url 'search_live_partial' %}"
+                        hx-trigger="keyup changed delay:300ms"
+                        hx-target="#search-results-dropdown"
+                    >
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5"></i>
+                </div>
+                <!-- Dropdown results -->
+                <div id="search-results-dropdown" class="absolute top-full left-0 right-0 mt-2 z-50"></div>
+            </div>
+
+            <!-- Nav Links -->
+            <nav class="flex items-center gap-2 md:gap-4">
+                <a href="{% url 'index' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="compass" class="w-4 h-4 text-brand-gold"></i>
+                    <span class="hidden sm:inline">Odkrywaj</span>
+                </a>
+                <a href="{% url 'roulette' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <i data-lucide="dices" class="w-4 h-4 text-purple-400"></i>
+                    <span class="hidden sm:inline">Ruletka</span>
+                </a>
+                <a href="{% url 'watchlist' %}" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all relative">
+                    <i data-lucide="bookmark" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="hidden sm:inline">Watchlista</span>
+                    <span id="watchlist-badge" class="bg-brand-gold text-black text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+                        {{ watchlist_count|default:0 }}
+                    </span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-8 px-4 text-center text-xs text-gray-500">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <span class="font-display font-bold text-white text-base">CineScope Django</span>
+                <span>• Zbudowane w Pythonie & Django z HTMX</span>
+            </div>
+            <div>
+                Dane o filmach & zwiastuny z <a href="https://www.themoviedb.org" target="_blank" class="text-brand-gold hover:underline">TMDB API</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Movie Detail Modal Overlay Target -->
+    <div id="movie-modal-container"></div>
+
+    <script>
+        lucide.createIcons();
+        document.body.addEventListener('htmx:afterSwap', function() {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

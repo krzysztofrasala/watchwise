@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-8 text-center py-6">
+    <div class="space-y-2">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-bold uppercase tracking-wider">
+            <i data-lucide="dices" class="w-4 h-4"></i> Co dzisiaj oglądamy?
+        </div>
+        <h1 class="text-3xl md:text-5xl font-black text-white tracking-tight">
+            Movie Roulette
+        </h1>
+        <p class="text-sm text-gray-400">
+            Nie wiesz co obejrzeć? Wybierz gatunek i zakręć ruletką!
+        </p>
+    </div>
+
+    <!-- Spin Controls -->
+    <form method="GET" action="{% url 'roulette' %}" class="glass-panel p-6 rounded-3xl space-y-4 max-w-md mx-auto shadow-2xl border border-white/10">
+        <input type="hidden" name="spin" value="true">
+        
+        <div class="space-y-2 text-left">
+            <label class="text-xs font-semibold text-gray-400">Wybierz gatunek:</label>
+            <select name="genre" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-gold">
+                <option value="All" {% if selected_genre == "All" %}selected{% endif %}>Wszystkie gatunki</option>
+                {% for g in genres %}
+                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 text-base transition-all hover:scale-105 active:scale-95">
+            <i data-lucide="dices" class="w-5 h-5"></i> Losuj Film!
+        </button>
+    </form>
+
+    <!-- Spin Result Card -->
+    {% if movie %}
+    <div class="pt-6 animate-fade-in">
+        <div class="glass-panel rounded-3xl p-6 md:p-8 max-w-lg mx-auto border border-brand-gold/30 shadow-2xl text-left space-y-4">
+            <div class="flex gap-6 items-center">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-32 h-48 object-cover rounded-2xl shadow-lg shrink-0 border border-white/10">
+                <div class="space-y-2 flex-1">
+                    <span class="bg-brand-gold text-black font-extrabold text-[10px] px-2 py-0.5 rounded uppercase">
+                        Twój Wylosowany Film
+                    </span>
+                    <h2 class="text-xl md:text-2xl font-black text-white leading-tight">
+                        {{ movie.title }}
+                    </h2>
+                    <div class="flex items-center gap-3 text-xs text-gray-400">
+                        <span class="text-brand-gold font-bold flex items-center gap-1">
+                            <i data-lucide="star" class="w-3.5 h-3.5 fill-brand-gold"></i> {{ movie.vote_average }}
+                        </span>
+                        <span>{{ movie.year }}</span>
+                    </div>
+                    <p class="text-xs text-gray-300 line-clamp-3 leading-relaxed">
+                        {{ movie.overview|default:"Brak opisu." }}
+                    </p>
+                </div>
+            </div>
+
+            <button 
+                hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
+                hx-target="#movie-modal-container"
+                class="w-full bg-brand-gold hover:bg-brand-goldHover text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm shadow-md"
+            >
+                <i data-lucide="play" class="w-4 h-4 fill-black"></i> Zobacz szczegóły i zwiastun
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

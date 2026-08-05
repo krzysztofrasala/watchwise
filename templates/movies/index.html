@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- Hero Banner (Featured Movie) -->
+{% if hero_movie %}
+<section class="relative rounded-3xl overflow-hidden glass-panel border border-white/10 mb-10 shadow-2xl">
+    <div class="absolute inset-0 bg-gradient-to-r from-brand-dark via-brand-dark/90 to-transparent z-10"></div>
+    {% if hero_movie.backdrop_path %}
+    <img src="{{ hero_movie.backdrop_path }}" alt="{{ hero_movie.title }}" class="absolute inset-0 w-full h-full object-cover object-center opacity-40">
+    {% else %}
+    <img src="{{ hero_movie.poster_url }}" alt="{{ hero_movie.title }}" class="absolute inset-0 w-full h-full object-cover object-center opacity-25 filter blur-sm">
+    {% endif %}
+
+    <div class="relative z-20 p-6 md:p-12 flex flex-col md:flex-row items-start md:items-center gap-8">
+        <div class="w-36 md:w-48 shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/15 group cursor-pointer"
+             hx-get="{% url 'movie_modal_partial' hero_movie.movie_id %}"
+             hx-target="#movie-modal-container">
+            <img src="{{ hero_movie.poster_url }}" alt="{{ hero_movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+        </div>
+
+        <div class="flex-1 space-y-4 max-w-2xl">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="bg-brand-gold text-black font-extrabold text-xs px-2.5 py-1 rounded-md tracking-wide">
+                    HIT DNIA
+                </span>
+                <span class="flex items-center gap-1 bg-black/60 text-brand-gold font-bold text-xs px-2.5 py-1 rounded-md border border-brand-gold/30">
+                    <i data-lucide="star" class="w-3.5 h-3.5 fill-brand-gold"></i> {{ hero_movie.vote_average }} / 10
+                </span>
+                {% if hero_movie.year %}
+                <span class="text-xs text-gray-400 font-semibold">{{ hero_movie.year }}</span>
+                {% endif %}
+            </div>
+
+            <h1 class="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight">
+                {{ hero_movie.title }}
+            </h1>
+
+            {% if hero_movie.tagline %}
+            <p class="text-sm md:text-base text-brand-gold/90 font-medium italic">"{{ hero_movie.tagline }}"</p>
+            {% endif %}
+
+            <p class="text-sm text-gray-300 line-clamp-3 leading-relaxed">
+                {{ hero_movie.overview|default:"Brak szczegółowego opisu dla tego filmu." }}
+            </p>
+
+            <div class="pt-2 flex items-center gap-3">
+                <button 
+                    hx-get="{% url 'movie_modal_partial' hero_movie.movie_id %}"
+                    hx-target="#movie-modal-container"
+                    class="bg-brand-gold hover:bg-brand-goldHover text-black font-bold px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg shadow-brand-gold/25 hover:scale-105 transition-all"
+                >
+                    <i data-lucide="play" class="w-5 h-5 fill-black"></i> Szcze goły i zwiastun
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Filters & Section Title -->
+<section class="space-y-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <i data-lucide="film" class="w-6 h-6 text-brand-gold"></i> Biblioteka Filmów
+            </h2>
+            <p class="text-xs text-gray-400">Odkrywaj filmy dopasowane do Twojego gustu</p>
+        </div>
+
+        <!-- Sort dropdown -->
+        <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-400 font-medium">Sortuj po:</span>
+            <select 
+                name="sort_by" 
+                class="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-gold"
+                hx-get="{% url 'movie_grid_partial' %}"
+                hx-include="#filter-form"
+                hx-target="#movie-grid-container"
+            >
+                <option value="vote_desc">Najwyższa ocena</option>
+                <option value="year_desc">Najnowsze</option>
+                <option value="year_asc">Najstarsze</option>
+                <option value="title_asc">Tytuł A-Z</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <form id="filter-form" class="glass-panel p-4 rounded-2xl space-y-4">
+        <!-- Genre Pills Slider -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <label class="cursor-pointer">
+                <input type="radio" name="genre" value="All" checked class="peer hidden"
+                       hx-get="{% url 'movie_grid_partial' %}"
+                       hx-include="#filter-form"
+                       hx-target="#movie-grid-container">
+                <span class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/5 text-gray-300 border border-white/10 peer-checked:bg-brand-gold peer-checked:text-black peer-checked:border-brand-gold transition-all block">
+                    Wszystkie Gatunki
+                </span>
+            </label>
+            {% for g in genres %}
+            <label class="cursor-pointer">
+                <input type="radio" name="genre" value="{{ g }}" class="peer hidden"
+                       hx-get="{% url 'movie_grid_partial' %}"
+                       hx-include="#filter-form"
+                       hx-target="#movie-grid-container">
+                <span class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/5 text-gray-300 border border-white/10 peer-checked:bg-brand-gold peer-checked:text-black peer-checked:border-brand-gold transition-all block">
+                    {{ g }}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+    </form>
+
+    <!-- Movie Grid Container (HTMX Target) -->
+    <div id="movie-grid-container">
+        {% include 'movies/partials/movie_grid.html' %}
+    </div>
+</section>
+
+{% endblock %}
