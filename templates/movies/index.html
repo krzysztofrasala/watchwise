@@ -59,8 +59,14 @@
 </section>
 {% endif %}
 
+<!-- Live TMDB Trending & Upcoming Section -->
+<section class="mb-12" id="trending-section-container">
+    {% include 'movies/partials/trending_section.html' %}
+</section>
+
 <!-- Personalized ML Recommendations ("Rekomendowane dla Ciebie") -->
 {% if recommended_movies %}
+
 <section class="mb-12 space-y-4">
     <div class="flex items-center justify-between">
         <div>

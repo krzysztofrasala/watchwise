@@ -78,3 +78,14 @@ class MoviesViewTestCase(TestCase):
         response = self.client.get(reverse('discover'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Precise Movie Filtering")
+
+    def test_trending_services_and_partial_view(self):
+        # Service function test
+        items = services.get_trending_content(category="movies", lang="PL")
+        self.assertIsInstance(items, list)
+
+        # Partial view test
+        response = self.client.get(reverse('trending_partial'), {'category': 'tv'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Popularne Seriale")
+
