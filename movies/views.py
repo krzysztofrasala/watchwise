@@ -270,6 +270,7 @@ def watchlist(request):
 @require_POST
 def toggle_watchlist(request, movie_id):
     added, count = profiles.toggle_watchlist_item(request.session, movie_id)
+    request.session.modified = True
     lang = i18n.get_lang(request.session)
     msg = "Dodano do Twojej biblioteki" if added else "Usunięto z biblioteki"
     response = JsonResponse({"added": added, "count": count})
@@ -286,6 +287,7 @@ def rate_movie(request, movie_id):
         stars = int(request.POST.get("stars", 0))
 
     ratings = profiles.set_movie_rating(request.session, movie_id, stars)
+    request.session.modified = True
     msg = f"Zapisano ocenę {stars}/5 ★" if stars > 0 else "Usunięto ocenę"
     response = JsonResponse({"status": "ok", "movie_id": movie_id, "rating": stars})
     response["HX-Trigger"] = json.dumps({"showToast": {"title": msg, "type": "success" if stars > 0 else "info"}})
