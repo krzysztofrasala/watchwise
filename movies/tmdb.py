@@ -56,7 +56,7 @@ def get_provider_logo_url(logo_path: str, size: str = "w92") -> str:
     return f"{IMAGE_BASE_URL}/{size}{path}"
 
 
-def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: str) -> str:
+def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: str, justwatch_url: str = None) -> str:
     title_q = quote(movie_title or "")
     name_lower = (provider_name or "").lower()
 
@@ -64,12 +64,14 @@ def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: s
         return f"https://www.netflix.com/search?q={title_q}"
     elif "disney" in name_lower or provider_id == 337:
         return f"https://www.disneyplus.com/search?q={title_q}"
-    elif "prime" in name_lower or "amazon" in name_lower or provider_id == 119:
+    elif "prime" in name_lower or "amazon" in name_lower or provider_id in [119, 10, 9]:
         return f"https://www.primevideo.com/search?phrase={title_q}"
     elif "max" in name_lower or "hbo" in name_lower or provider_id in [1899, 384]:
         return f"https://www.max.com/search?q={title_q}"
-    elif "apple" in name_lower or provider_id == 350:
-        return f"https://tv.apple.com/search?term={title_q}"
+    elif "apple" in name_lower or "itunes" in name_lower or provider_id in [350, 2]:
+        if justwatch_url:
+            return justwatch_url
+        return f"https://www.justwatch.com/pl/search?q={title_q}"
     elif "skyshowtime" in name_lower or provider_id == 1773:
         return f"https://www.skyshowtime.com/search?q={title_q}"
     elif "canal" in name_lower:
@@ -78,8 +80,27 @@ def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: s
         return f"https://player.pl/szukaj?q={title_q}"
     elif "polsat" in name_lower:
         return f"https://polsatboxgo.pl/szukaj?phrase={title_q}"
+    elif "rakuten" in name_lower or provider_id == 35:
+        return f"https://www.rakuten.tv/pl/search?q={title_q}"
+    elif "youtube" in name_lower or provider_id == 192:
+        return f"https://www.youtube.com/results?search_query={title_q}"
+    elif "google" in name_lower or provider_id == 3:
+        return f"https://play.google.com/store/search?c=movies&q={title_q}"
+    elif "chili" in name_lower or provider_id == 230:
+        return f"https://pl.chili.com/search?q={title_q}"
+    elif "pilot" in name_lower:
+        return f"https://pilot.wp.pl/szukaj?q={title_q}"
+    elif "viaplay" in name_lower:
+        return f"https://viaplay.pl/search?q={title_q}"
+    elif "megogo" in name_lower:
+        return f"https://megogo.net/pl/search?q={title_q}"
+    elif "filmbox" in name_lower:
+        return f"https://www.filmboxplus.com/pl/search?query={title_q}"
+    elif justwatch_url:
+        return justwatch_url
     else:
-        return f"https://www.google.com/search?q={quote((movie_title or '') + ' ' + (provider_name or ''))}"
+        return f"https://www.justwatch.com/pl/search?q={title_q}"
+
 
 
 @lru_cache(maxsize=300)
@@ -174,8 +195,9 @@ def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
                 pname = p.get("provider_name")
                 if pid not in seen_ids:
                     seen_ids.add(pid)
-                    direct_url = get_provider_direct_url(pname, pid, movie_title)
+                    direct_url = get_provider_direct_url(pname, pid, movie_title, justwatch_url)
                     vod_list.append({
+
                         "id": pid,
                         "name": pname,
                         "logo_url": get_provider_logo_url(p.get("logo_path")),
@@ -276,3 +298,118 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
     except Exception:
         pass
     return []
+
+
+@lru_cache(maxsize=50)
+def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: str = "PL", limit: int = 12) -> list[dict]:
+    """Fetch trending movies or TV series from TMDB API."""
+    api_key = get_api_key()
+    lang_map = {
+        "PL": "pl-PL",
+        "EN": "en-US",
+        "DE": "de-DE",
+        "ES": "es-ES",
+        "FR": "fr-FR",
+        "IT": "it-IT",
+    }
+    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+    valid_type = "tv" if media_type == "tv" else "movie"
+
+    try:
+        url = f"{BASE_URL}/trending/{valid_type}/{time_window}"
+        params = {
+            "api_key": api_key,
+            "language": tmdb_lang,
+        }
+        res = requests.get(url, params=params, timeout=4)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            items = []
+            for item in results:
+                movie_id = item.get("id")
+                title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name")
+                if not title or not movie_id:
+                    continue
+
+                date_str = item.get("release_date") or item.get("first_air_date") or ""
+                year = int(date_str[:4]) if date_str[:4].isdigit() else None
+
+                items.append({
+                    "movie_id": movie_id,
+                    "title": title,
+                    "media_type": valid_type,
+                    "is_tv": (valid_type == "tv"),
+                    "media_badge": "📺 Serial" if valid_type == "tv" else "🎬 Film",
+                    "year": year,
+                    "poster_path": item.get("poster_path"),
+                    "backdrop_path": item.get("backdrop_path"),
+                    "poster_url": get_poster_url(item.get("poster_path")),
+                    "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
+                    "vote_average": round(float(item.get("vote_average", 0.0)), 1),
+                    "overview": item.get("overview", ""),
+                    "release_date": date_str,
+                })
+                if len(items) >= limit:
+                    break
+            return items
+    except Exception:
+        pass
+    return []
+
+
+@lru_cache(maxsize=50)
+def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
+    """Fetch upcoming movies from TMDB API."""
+    api_key = get_api_key()
+    lang_map = {
+        "PL": "pl-PL",
+        "EN": "en-US",
+        "DE": "de-DE",
+        "ES": "es-ES",
+        "FR": "fr-FR",
+        "IT": "it-IT",
+    }
+    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+
+    try:
+        url = f"{BASE_URL}/movie/upcoming"
+        params = {
+            "api_key": api_key,
+            "language": tmdb_lang,
+            "region": "PL",
+        }
+        res = requests.get(url, params=params, timeout=4)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            items = []
+            for item in results:
+                movie_id = item.get("id")
+                title = item.get("title") or item.get("original_title")
+                if not title or not movie_id:
+                    continue
+
+                date_str = item.get("release_date") or ""
+                year = int(date_str[:4]) if date_str[:4].isdigit() else None
+
+                items.append({
+                    "movie_id": movie_id,
+                    "title": title,
+                    "media_type": "movie",
+                    "is_tv": False,
+                    "media_badge": "🍿 Premiera",
+                    "year": year,
+                    "poster_path": item.get("poster_path"),
+                    "backdrop_path": item.get("backdrop_path"),
+                    "poster_url": get_poster_url(item.get("poster_path")),
+                    "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
+                    "vote_average": round(float(item.get("vote_average", 0.0)), 1),
+                    "overview": item.get("overview", ""),
+                    "release_date": date_str,
+                })
+                if len(items) >= limit:
+                    break
+            return items
+    except Exception:
+        pass
+    return []
+

@@ -234,3 +234,23 @@ def get_random_movie(genre: str = None):
         return None
     sample = df.sample(n=1).iloc[0].to_dict()
     return sample
+
+
+def get_trending_content(category: str = "movies", lang: str = "PL") -> list[dict]:
+    """Fetch live trending content from TMDB with fallback to dataset."""
+    if category == "tv":
+        results = tmdb.fetch_trending(media_type="tv", time_window="day", lang=lang, limit=12)
+    elif category == "upcoming":
+        results = tmdb.fetch_upcoming(lang=lang, limit=12)
+    else:
+        results = tmdb.fetch_trending(media_type="movie", time_window="day", lang=lang, limit=12)
+
+    if not results:
+        filtered = filter_movies(genre="All", sort_by="vote_desc", per_page=12)
+        results = filtered.get("items", [])
+        for r in results:
+            r["media_type"] = "movie"
+            r["is_tv"] = False
+            r["media_badge"] = "🎬 Film"
+    return results
+

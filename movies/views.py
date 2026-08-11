@@ -6,8 +6,8 @@ from . import services, tmdb, recommender, taste, nl_query, profiles, i18n
 
 
 def prepare_movie_item(item: dict) -> dict:
-    item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
-    item["backdrop_url"] = tmdb.get_backdrop_url(item.get("backdrop_path"))
+    item["poster_url"] = tmdb.get_poster_url(item.get("poster_path") or item.get("poster_url"))
+    item["backdrop_url"] = tmdb.get_backdrop_url(item.get("backdrop_path") or item.get("backdrop_url"))
     try:
         item["vote_average"] = round(float(item.get("vote_average") or 0.0), 1)
     except (ValueError, TypeError):
@@ -73,16 +73,42 @@ def index(request):
         prepare_movie_item(rec)
         rec["user_rating"] = ratings.get(rec["movie_id"], 0)
 
+    trending_items = services.get_trending_content(category="movies", lang=lang)
+    for item in trending_items:
+        prepare_movie_item(item)
+        item["user_rating"] = ratings.get(item["movie_id"], 0)
+
     ctx.update({
         "genres": genres,
         "movies": filtered["items"],
         "recommended_movies": recommended_movies,
+        "trending_items": trending_items,
+        "current_category": "movies",
         "total_count": filtered["total_count"],
         "page": filtered["page"],
         "total_pages": filtered["total_pages"],
         "hero_movie": hero_movie,
     })
     return render(request, "movies/index.html", ctx)
+
+
+def trending_partial(request):
+    ctx = get_base_context(request)
+    lang = ctx["current_lang"]
+    category = request.GET.get("category", "movies")
+    trending_items = services.get_trending_content(category=category, lang=lang)
+
+    ratings = profiles.get_active_ratings(request.session)
+    for item in trending_items:
+        prepare_movie_item(item)
+        item["user_rating"] = ratings.get(item["movie_id"], 0)
+
+    ctx.update({
+        "trending_items": trending_items,
+        "current_category": category,
+    })
+    return render(request, "movies/partials/trending_section.html", ctx)
+
 
 
 def movie_grid_partial(request):
