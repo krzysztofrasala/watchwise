@@ -19,6 +19,8 @@ def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
             }
         }
         session["active_profile"] = DEFAULT_PROFILE_NAME
+        if hasattr(session, "modified"):
+            session.modified = True
 
     return session["profiles"]
 
@@ -32,6 +34,8 @@ def set_active_profile(session: dict[str, Any], name: str) -> None:
     profiles = get_profile_data(session)
     if name in profiles:
         session["active_profile"] = name
+        if hasattr(session, "modified"):
+            session.modified = True
 
 
 def add_profile(session: dict[str, Any], name: str) -> bool:
@@ -46,6 +50,8 @@ def add_profile(session: dict[str, Any], name: str) -> bool:
     }
     session["profiles"] = profiles
     session["active_profile"] = clean_name
+    if hasattr(session, "modified"):
+        session.modified = True
     return True
 
 
@@ -76,6 +82,8 @@ def toggle_watchlist_item(session: dict[str, Any], movie_id: int) -> tuple[bool,
     session["profiles"] = profiles
     # Also sync to request.session["watchlist"] for backward compatibility
     session["watchlist"] = watchlist
+    if hasattr(session, "modified"):
+        session.modified = True
     return added, len(watchlist)
 
 
@@ -102,4 +110,6 @@ def set_movie_rating(session: dict[str, Any], movie_id: int, stars: int) -> dict
 
     profiles[active]["ratings"] = ratings
     session["profiles"] = profiles
+    if hasattr(session, "modified"):
+        session.modified = True
     return ratings
