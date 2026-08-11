@@ -38,8 +38,8 @@ Watch Wise is a modern, high-performance web application for movie and TV series
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/krzysztofrasala/cinescope-django.git
-   cd cinescope-django
+   git clone https://github.com/krzysztofrasala/watchwise.git
+   cd watchwise
    ```
 
 2. **Create and activate a virtual environment (`venv`)**:
@@ -72,7 +72,7 @@ Watch Wise is a modern, high-performance web application for movie and TV series
 ## ☁️ Deployment Guide (Render.com)
 
 1. Create a free account on [Render.com](https://render.com).
-2. Click **New +** -> **Web Service** and connect your GitHub repository `krzysztofrasala/cinescope-django`.
+2. Click **New +** -> **Web Service** and connect your GitHub repository `krzysztofrasala/watchwise`.
 3. Render will auto-detect Python. Specify the build and start commands:
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `gunicorn config.wsgi:application`
