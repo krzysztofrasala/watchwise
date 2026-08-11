@@ -206,3 +206,69 @@ def recommend_for_group(
 
     combined.sort(key=lambda x: x[0], reverse=True)
     return [m for _, m in combined[:top_n]]
+
+
+def get_harmony_score(g1: str, g2: str) -> int:
+    if not g1 or not g2 or g1 == "All" or g2 == "All":
+        return 85
+    if g1 == g2:
+        return 96
+    g1_lower, g2_lower = g1.lower(), g2.lower()
+    pair = {g1_lower, g2_lower}
+    if pair in [{'action', 'science fiction'}, {'action', 'adventure'}, {'comedy', 'romance'}, {'thriller', 'mystery'}, {'horror', 'thriller'}, {'action', 'thriller'}]:
+        return 90
+    if pair in [{'horror', 'romance'}, {'documentary', 'action'}, {'animation', 'horror'}]:
+        return 65
+    return 78
+
+
+def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") -> list[dict[str, Any]]:
+    movies_df, _, _ = services.load_dataset_with_vectors()
+    if movies_df.empty:
+        return []
+
+    items = []
+    g1_valid = g1 and g1 != "All"
+    g2_valid = g2 and g2 != "All"
+
+    for _, row in movies_df.iterrows():
+        genres_raw = row.get("genres_list", [])
+        genres = [str(g).lower() for g in genres_raw] if isinstance(genres_raw, (list, tuple)) else []
+        if not genres:
+            continue
+
+        match1 = (g1.lower() in genres) if g1_valid else True
+        match2 = (g2.lower() in genres) if g2_valid else True
+
+        if not (match1 or match2):
+            continue
+
+        if match1 and match2:
+            score = 92
+            reason = f"Kompromis: łączy {g1} & {g2}"
+        elif match1:
+            score = 82
+            reason = f"Dla Osoby 1 ({g1})"
+        else:
+            score = 82
+            reason = f"Dla Osoby 2 ({g2})"
+
+        vote_avg = float(row.get("vote_average", 0.0) or 0.0)
+        final_score = int(round(score * 0.75 + (vote_avg * 2.5)))
+
+        items.append((final_score, {
+            "movie_id": int(row["movie_id"]),
+            "title": str(row["title"]),
+            "year": int(row.get("year", 0)),
+            "poster_path": row.get("poster_path"),
+            "backdrop_path": row.get("backdrop_path"),
+            "poster_url": tmdb.get_poster_url(row.get("poster_path")),
+            "backdrop_url": tmdb.get_backdrop_url(row.get("backdrop_path")),
+            "vote_average": round(vote_avg, 1),
+            "overview": str(row.get("overview", "")),
+            "match_score": min(99, final_score),
+            "match_reason": reason,
+        }))
+
+    items.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in items[:top_n]]

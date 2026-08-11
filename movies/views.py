@@ -332,6 +332,20 @@ def compare(request):
     lang = ctx["current_lang"]
     all_profiles_dict = profiles.get_profile_data(request.session)
     profile_names = list(all_profiles_dict.keys())
+    genres = services.get_all_genres()
+
+    preset = request.GET.get("preset", "").strip()
+    if preset == "couple":
+        vibe1, vibe2 = "Action", "Romance"
+    elif preset == "friends":
+        vibe1, vibe2 = "Action", "Science Fiction"
+    elif preset == "horror":
+        vibe1, vibe2 = "Horror", "Thriller"
+    elif preset == "family":
+        vibe1, vibe2 = "Animation", "Adventure"
+    else:
+        vibe1 = request.GET.get("vibe1", "Action")
+        vibe2 = request.GET.get("vibe2", "Comedy")
 
     p1 = request.GET.get("p1", profiles.get_active_profile_name(request.session))
     p2 = request.GET.get("p2", profile_names[1] if len(profile_names) > 1 else p1)
@@ -348,6 +362,11 @@ def compare(request):
         lang=lang
     )
 
+    if not recommendations:
+        recommendations = recommender.recommend_for_vibes(vibe1, vibe2, top_n=12, lang=lang)
+
+    harmony_score = recommender.get_harmony_score(vibe1, vibe2)
+
     for rec in recommendations:
         prepare_movie_item(rec)
 
@@ -357,6 +376,11 @@ def compare(request):
 
     ctx.update({
         "profile_names": profile_names,
+        "genres": genres,
+        "vibe1": vibe1,
+        "vibe2": vibe2,
+        "preset": preset,
+        "harmony_score": harmony_score,
         "p1": p1,
         "p2": p2,
         "p1_display": p1_display,
