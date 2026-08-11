@@ -241,12 +241,16 @@ def watchlist(request):
 
     movies = []
     for mid in watchlist_ids:
-        m = services.get_movie_by_id(mid)
+        try:
+            mid_int = int(mid)
+        except (ValueError, TypeError):
+            continue
+        m = services.get_movie_by_id(mid_int)
         if not m:
-            tmdb_info = tmdb.fetch_movie_details(mid, lang=lang)
+            tmdb_info = tmdb.fetch_movie_details(mid_int, lang=lang)
             if tmdb_info:
                 m = {
-                    "movie_id": mid,
+                    "movie_id": mid_int,
                     "title": tmdb_info.get("title", ""),
                     "year": tmdb_info.get("year"),
                     "poster_path": tmdb_info.get("poster_path"),

@@ -87,7 +87,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-brand-gold selection:text-black">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-h-screen flex flex-col justify-between antialiased selection:bg-brand-gold selection:text-black">
 
     <!-- Header Navigation -->
     <header class="sticky top-0 z-40 glass-panel border-b border-white/10 px-4 md:px-8 py-3 transition-all duration-300">
@@ -222,6 +222,11 @@
         lucide.createIcons();
         document.body.addEventListener('htmx:afterSwap', function() {
             lucide.createIcons();
+        });
+
+        // Always configure CSRF token for HTMX requests
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
         });
 
         // Global Toast Notification Helper
