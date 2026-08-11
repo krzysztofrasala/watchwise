@@ -7,37 +7,48 @@
 <div class="max-w-4xl mx-auto space-y-6">
 
     <!-- Header Section -->
-    <div class="glass-panel p-6 rounded-3xl border border-white/10 flex items-center gap-4">
-        <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0">
-            🤖
+    <div class="glass-panel p-6 rounded-3xl border border-white/10 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-emerald-500/10">
+                🤖
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-white tracking-tight">{{ "ai_assistant_title"|t:current_lang }}</h1>
+                <p class="text-xs text-gray-400">
+                    {{ "ai_assistant_subtitle"|t:current_lang }}
+                </p>
+            </div>
         </div>
-        <div>
-            <h1 class="text-2xl font-black text-white tracking-tight">{{ "ai_assistant_title"|t:current_lang }}</h1>
-            <p class="text-xs text-gray-400">
-                {{ "ai_assistant_subtitle"|t:current_lang }}
-            </p>
+        <div class="hidden sm:flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                NLP v2.0 Active
+            </span>
         </div>
     </div>
 
     <!-- Chat History Feed -->
-    <div id="chat-feed" class="glass-panel p-6 rounded-3xl min-h-[400px] max-h-[600px] overflow-y-auto space-y-6">
+    <div id="chat-feed" class="glass-panel p-6 rounded-3xl min-h-[420px] max-h-[620px] overflow-y-auto space-y-6 scroll-smooth">
         <!-- Initial bot welcome message -->
         <div class="flex items-start gap-3">
             <div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-sm shrink-0">
                 🤖
             </div>
-            <div class="glass-card p-4 rounded-2xl max-w-xl text-sm text-gray-200 space-y-2">
-                <p>{{ "ai_bot_intro"|t:current_lang }}</p>
-                <div class="flex gap-2 flex-wrap pt-2">
-                    <button onclick="fillExample('{{ 'ai_example_1'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 transition-all">
-                        "{{ 'ai_example_1'|t:current_lang }}"
-                    </button>
-                    <button onclick="fillExample('{{ 'ai_example_2'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 transition-all">
-                        "{{ 'ai_example_2'|t:current_lang }}"
-                    </button>
-                    <button onclick="fillExample('{{ 'ai_example_3'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20 transition-all">
-                        "{{ 'ai_example_3'|t:current_lang }}"
-                    </button>
+            <div class="glass-card p-5 rounded-3xl max-w-xl text-sm text-gray-200 space-y-3 border border-white/10 shadow-xl">
+                <p class="font-medium">{{ "ai_bot_intro"|t:current_lang }}</p>
+                <div class="pt-1">
+                    <p class="text-[11px] text-gray-400 font-bold mb-2 uppercase tracking-wider">⚡ Quick Suggestions:</p>
+                    <div class="flex gap-2 flex-wrap">
+                        <button type="button" onclick="sendQuickPrompt('{{ 'ai_example_1'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 transition-all font-semibold hover:scale-105">
+                            💡 "{{ 'ai_example_1'|t:current_lang }}"
+                        </button>
+                        <button type="button" onclick="sendQuickPrompt('{{ 'ai_example_2'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 transition-all font-semibold hover:scale-105">
+                            🚀 "{{ 'ai_example_2'|t:current_lang }}"
+                        </button>
+                        <button type="button" onclick="sendQuickPrompt('{{ 'ai_example_3'|t:current_lang }}')" class="text-xs bg-white/5 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 transition-all font-semibold hover:scale-105">
+                            🍿 "{{ 'ai_example_3'|t:current_lang }}"
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -47,21 +58,22 @@
     </div>
 
     <!-- Message Input Form -->
-    <form hx-post="{% url 'assistant_chat_partial' %}" 
+    <form id="assistant-form" 
+          hx-post="{% url 'assistant_chat_partial' %}" 
           hx-target="#chat-messages-container" 
           hx-swap="beforeend"
-          onsubmit="setTimeout(() => { document.getElementById('message-input').value = ''; }, 10);"
-          class="glass-panel p-2 rounded-2xl flex items-center gap-2">
+          onsubmit="setTimeout(() => { document.getElementById('message-input').value = ''; scrollToBottom(); }, 50);"
+          class="glass-panel p-2.5 rounded-2xl flex items-center gap-2 border border-white/10">
         {% csrf_token %}
         <input 
             type="text" 
             id="message-input"
             name="message" 
             placeholder="{{ 'ai_placeholder'|t:current_lang }}" 
-            class="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder-gray-400 focus:outline-none"
+            class="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder-gray-400 focus:outline-none font-medium"
             required
         >
-        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-black font-bold px-5 py-3 rounded-xl text-xs flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 shrink-0">
+        <button type="submit" class="bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold px-6 py-3 rounded-xl text-xs flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20 shrink-0">
             <i data-lucide="send" class="w-4 h-4"></i> {{ "send"|t:current_lang }}
         </button>
     </form>
@@ -69,8 +81,27 @@
 </div>
 
 <script>
-    function fillExample(text) {
-        document.getElementById('message-input').value = text;
+    function scrollToBottom() {
+        const feed = document.getElementById('chat-feed');
+        if (feed) {
+            feed.scrollTop = feed.scrollHeight;
+        }
     }
+
+    function sendQuickPrompt(text) {
+        const input = document.getElementById('message-input');
+        input.value = text;
+        htmx.trigger('#assistant-form', 'submit');
+        setTimeout(() => {
+            input.value = '';
+            scrollToBottom();
+        }, 50);
+    }
+
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'chat-messages-container') {
+            scrollToBottom();
+        }
+    });
 </script>
 {% endblock %}

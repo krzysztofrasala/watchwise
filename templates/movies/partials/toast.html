@@ -1,0 +1,13 @@
+<!-- Glassmorphism Toast Component -->
+<div id="toast-template" class="hidden">
+    <div class="toast-item pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-900/90 backdrop-blur-xl border border-white/15 text-white shadow-2xl transition-all duration-300 transform translate-x-10 opacity-0 min-w-[260px] max-w-sm">
+        <div class="toast-icon flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm"></div>
+        <div class="flex-1 min-w-0">
+            <p class="toast-title font-bold text-xs text-white line-clamp-1"></p>
+            <p class="toast-message text-[11px] text-gray-300 line-clamp-1"></p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white text-xs p-1">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+</div>
