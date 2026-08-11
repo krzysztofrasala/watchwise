@@ -235,12 +235,27 @@ def roulette(request):
 
 def watchlist(request):
     ctx = get_base_context(request)
+    lang = ctx["current_lang"]
     watchlist_ids = profiles.get_active_watchlist(request.session)
     ratings = profiles.get_active_ratings(request.session)
 
     movies = []
     for mid in watchlist_ids:
         m = services.get_movie_by_id(mid)
+        if not m:
+            tmdb_info = tmdb.fetch_movie_details(mid, lang=lang)
+            if tmdb_info:
+                m = {
+                    "movie_id": mid,
+                    "title": tmdb_info.get("title", ""),
+                    "year": tmdb_info.get("year"),
+                    "poster_path": tmdb_info.get("poster_path"),
+                    "backdrop_path": tmdb_info.get("backdrop_path"),
+                    "poster_url": tmdb_info.get("poster_url"),
+                    "backdrop_url": tmdb_info.get("backdrop_url"),
+                    "vote_average": tmdb_info.get("vote_average", 0.0),
+                    "overview": tmdb_info.get("overview", ""),
+                }
         if m:
             prepare_movie_item(m)
             m["user_rating"] = ratings.get(m["movie_id"], 0)
