@@ -215,10 +215,61 @@
     <!-- Movie Detail Modal Overlay Target -->
     <div id="movie-modal-container"></div>
 
+    <!-- Floating Toast Notifications Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
     <script>
         lucide.createIcons();
         document.body.addEventListener('htmx:afterSwap', function() {
             lucide.createIcons();
+        });
+
+        // Global Toast Notification Helper
+        function showToast(title, message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'toast-item pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-900/90 backdrop-blur-xl border border-white/15 text-white shadow-2xl transition-all duration-300 transform translate-x-10 opacity-0 min-w-[260px] max-w-sm';
+
+            let iconBg = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            let iconSymbol = '✓';
+            if (type === 'error') {
+                iconBg = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                iconSymbol = '✕';
+            } else if (type === 'info') {
+                iconBg = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                iconSymbol = 'ℹ';
+            }
+
+            toast.innerHTML = `
+                <div class="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${iconBg}">
+                    ${iconSymbol}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-xs text-white line-clamp-1">${title}</p>
+                    ${message ? `<p class="text-[11px] text-gray-300 line-clamp-1">${message}</p>` : ''}
+                </div>
+            `;
+
+            container.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-10', 'opacity-0');
+            });
+
+            // Auto dismiss after 3.5s
+            setTimeout(() => {
+                toast.classList.add('translate-x-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Listen to HTMX showToast event
+        document.body.addEventListener('showToast', function(e) {
+            const detail = e.detail || {};
+            showToast(detail.title || detail.message || 'Sukces!', detail.message || '', detail.type || 'success');
         });
 
         // Close search dropdown when clicking outside

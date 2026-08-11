@@ -167,13 +167,15 @@
                 <!-- Cast Photo Grid -->
                 {% if movie.cast_details %}
                 <div class="pt-2 space-y-2">
-                    <span class="text-xs font-semibold text-gray-400">{{ "cast"|t:current_lang }}</span>
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">{{ "cast"|t:current_lang }}</span>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {% for actor in movie.cast_details %}
-                        <div class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 border border-white/5">
-                            <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="w-9 h-9 rounded-full object-cover shrink-0">
+                        <div class="flex items-center gap-2.5 p-2 rounded-xl bg-white/5 hover:bg-brand-gold/10 border border-white/5 hover:border-brand-gold/30 cursor-pointer transition-all group/actor shadow-sm"
+                             onclick="searchActor('{{ actor.name|escapejs }}')"
+                             title="Search movies with {{ actor.name }}">
+                            <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="w-9 h-9 rounded-full object-cover shrink-0 border border-white/10 group-hover/actor:border-brand-gold">
                             <div class="overflow-hidden">
-                                <div class="text-xs font-bold text-white truncate">{{ actor.name }}</div>
+                                <div class="text-xs font-bold text-white group-hover/actor:text-brand-gold transition-colors truncate">{{ actor.name }}</div>
                                 <div class="text-[10px] text-gray-400 truncate">{{ actor.character|default:"" }}</div>
                             </div>
                         </div>
@@ -252,6 +254,17 @@
                 }
             }
         });
+    }
+
+    function searchActor(name) {
+        const modal = document.getElementById('movie-modal');
+        if (modal) modal.remove();
+        const input = document.querySelector('input[name="q"]');
+        if (input) {
+            input.value = name;
+            input.focus();
+            htmx.trigger(input, 'keyup');
+        }
     }
 
     const userRating = {{ user_rating|default:0 }};

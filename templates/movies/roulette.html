@@ -4,7 +4,11 @@
 {% block title %}{{ "roulette_title"|t:current_lang }} — CineScope 2.0{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-8 text-center py-6">
+<div class="max-w-3xl mx-auto space-y-8 text-center py-6 relative">
+
+    <!-- Canvas Confetti Overlay -->
+    <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
+
     <div class="space-y-2">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-bold uppercase tracking-wider">
             <i data-lucide="dices" class="w-4 h-4"></i> {{ "what_are_we_watching"|t:current_lang }}
@@ -18,12 +22,12 @@
     </div>
 
     <!-- Spin Controls -->
-    <form method="GET" action="{% url 'roulette' %}" class="glass-panel p-6 rounded-3xl space-y-4 max-w-md mx-auto shadow-2xl border border-white/10">
+    <form method="GET" action="{% url 'roulette' %}" id="roulette-form" class="glass-panel p-6 rounded-3xl space-y-5 max-w-md mx-auto shadow-2xl border border-white/10">
         <input type="hidden" name="spin" value="true">
         
         <div class="space-y-2 text-left">
-            <label class="text-xs font-semibold text-gray-400">{{ "select_genre"|t:current_lang }}</label>
-            <select name="genre" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-gold">
+            <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">{{ "select_genre"|t:current_lang }}</label>
+            <select name="genre" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-gold font-semibold">
                 <option value="All" {% if selected_genre == "All" %}selected{% endif %}>{{ "all_genres"|t:current_lang }}</option>
                 {% for g in genres %}
                 <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
@@ -31,29 +35,29 @@
             </select>
         </div>
 
-        <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-extrabold py-4 px-6 rounded-xl shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 text-base transition-all hover:scale-105 active:scale-95">
+        <button type="submit" id="spin-btn" class="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 text-base transition-all hover:scale-105 active:scale-95">
             <i data-lucide="dices" class="w-5 h-5"></i> {{ "spin_roulette"|t:current_lang }}
         </button>
     </form>
 
     <!-- Spin Result Card -->
     {% if movie %}
-    <div class="pt-6 animate-fade-in">
-        <div class="glass-panel rounded-3xl p-6 md:p-8 max-w-lg mx-auto border border-brand-gold/30 shadow-2xl text-left space-y-4">
+    <div id="result-card" class="pt-6 animate-fade-in">
+        <div class="glass-panel rounded-3xl p-6 md:p-8 max-w-lg mx-auto border border-amber-500/40 shadow-2xl text-left space-y-4 relative overflow-hidden bg-gradient-to-br from-gray-900/90 to-purple-950/40">
             <div class="flex gap-6 items-center">
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-32 h-48 object-cover rounded-2xl shadow-lg shrink-0 border border-white/10">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-32 h-48 object-cover rounded-2xl shadow-2xl shrink-0 border border-white/20">
                 <div class="space-y-2 flex-1">
-                    <span class="bg-brand-gold text-black font-extrabold text-[10px] px-2 py-0.5 rounded uppercase">
-                        {{ "hit_of_the_day"|t:current_lang }}
+                    <span class="bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase shadow-md">
+                        🎉 {{ "hit_of_the_day"|t:current_lang }}
                     </span>
                     <h2 class="text-xl md:text-2xl font-black text-white leading-tight">
                         {{ movie.title }}
                     </h2>
                     <div class="flex items-center gap-3 text-xs text-gray-400">
-                        <span class="text-brand-gold font-bold flex items-center gap-1">
+                        <span class="text-brand-gold font-extrabold flex items-center gap-1 bg-brand-gold/10 px-2 py-0.5 rounded-md border border-brand-gold/20">
                             <i data-lucide="star" class="w-3.5 h-3.5 fill-brand-gold"></i> {{ movie.vote_average }}
                         </span>
-                        <span>{{ movie.year }}</span>
+                        <span class="font-bold">{{ movie.year }}</span>
                     </div>
                     <p class="text-xs text-gray-300 line-clamp-3 leading-relaxed">
                         {{ movie.overview|default:"" }}
@@ -64,7 +68,7 @@
             <button 
                 hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
                 hx-target="#movie-modal-container"
-                class="w-full bg-brand-gold hover:bg-brand-goldHover text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm shadow-md"
+                class="w-full bg-brand-gold hover:bg-brand-goldHover text-black font-extrabold py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm shadow-xl shadow-brand-gold/20 transition-all hover:scale-[1.02]"
             >
                 <i data-lucide="play" class="w-4 h-4 fill-black"></i> {{ "details_and_trailer"|t:current_lang }}
             </button>
@@ -72,4 +76,69 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+    // Confetti Explosion FX
+    function triggerConfetti() {
+        const canvas = document.getElementById('confetti-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        const colors = ['#F5C518', '#ec4899', '#a855f7', '#10b981', '#3b82f6'];
+
+        for (let i = 0; i < 80; i++) {
+            particles.push({
+                x: canvas.width / 2,
+                y: canvas.height / 2 - 100,
+                vx: (Math.random() - 0.5) * 12,
+                vy: (Math.random() - 0.7) * 14,
+                size: Math.random() * 8 + 4,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                rotation: Math.random() * 360,
+                rspeed: (Math.random() - 0.5) * 10,
+                opacity: 1
+            });
+        }
+
+        let animationFrame;
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let alive = false;
+
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.3; // gravity
+                p.rotation += p.rspeed;
+                p.opacity -= 0.015;
+
+                if (p.opacity > 0) {
+                    alive = true;
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.globalAlpha = Math.max(0, p.opacity);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+                }
+            });
+
+            if (alive) {
+                animationFrame = requestAnimationFrame(render);
+            }
+        }
+
+        render();
+    }
+
+    {% if movie %}
+    document.addEventListener('DOMContentLoaded', function() {
+        triggerConfetti();
+    });
+    {% endif %}
+</script>
 {% endblock %}
