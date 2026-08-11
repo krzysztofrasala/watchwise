@@ -223,6 +223,7 @@ def get_harmony_score(g1: str, g2: str) -> int:
 
 
 def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") -> list[dict[str, Any]]:
+    code = lang.upper().strip()
     movies_df, _, _ = services.load_dataset_with_vectors()
     if movies_df.empty:
         return []
@@ -245,13 +246,46 @@ def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") 
 
         if match1 and match2:
             score = 92
-            reason = f"Kompromis: łączy {g1} & {g2}"
+            if code == "EN":
+                reason = f"Compromise: combines {g1} & {g2}"
+            elif code == "DE":
+                reason = f"Kompromiss: kombiniert {g1} & {g2}"
+            elif code == "ES":
+                reason = f"Compromiso: combina {g1} y {g2}"
+            elif code == "FR":
+                reason = f"Compromis : combine {g1} et {g2}"
+            elif code == "IT":
+                reason = f"Compromesso: combina {g1} e {g2}"
+            else:
+                reason = f"Kompromis: łączy {g1} & {g2}"
         elif match1:
             score = 82
-            reason = f"Dla Osoby 1 ({g1})"
+            if code == "EN":
+                reason = f"For Person 1 ({g1})"
+            elif code == "DE":
+                reason = f"Für Person 1 ({g1})"
+            elif code == "ES":
+                reason = f"Para Persona 1 ({g1})"
+            elif code == "FR":
+                reason = f"Pour Personne 1 ({g1})"
+            elif code == "IT":
+                reason = f"Per Persona 1 ({g1})"
+            else:
+                reason = f"Dla Osoby 1 ({g1})"
         else:
             score = 82
-            reason = f"Dla Osoby 2 ({g2})"
+            if code == "EN":
+                reason = f"For Person 2 ({g2})"
+            elif code == "DE":
+                reason = f"Für Person 2 ({g2})"
+            elif code == "ES":
+                reason = f"Para Persona 2 ({g2})"
+            elif code == "FR":
+                reason = f"Pour Personne 2 ({g2})"
+            elif code == "IT":
+                reason = f"Per Persona 2 ({g2})"
+            else:
+                reason = f"Dla Osoby 2 ({g2})"
 
         vote_avg = float(row.get("vote_average", 0.0) or 0.0)
         final_score = int(round(score * 0.75 + (vote_avg * 2.5)))
