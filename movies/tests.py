@@ -13,7 +13,7 @@ class MoviesViewTestCase(TestCase):
     def test_index_view(self):
         response = self.client.get(reverse('index'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "CineScope")
+        self.assertContains(response, "Watch Wise")
 
     def test_discover_view(self):
         response = self.client.get(reverse('discover'))

@@ -1,4 +1,4 @@
-# 🎬 CineScope Django — AI-Powered Movie & TV Series Recommender Web App
+# 🎬 Watch Wise 2.0 — AI-Powered Movie & TV Series Recommender Web App
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
 ![Django](https://img.shields.io/badge/Django-4.2+-092E20.svg)
@@ -6,7 +6,7 @@
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.0-38BDF8.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-CineScope is a modern, high-performance web application for movie and TV series recommendations built with **Python 3**, **Django 4**, **HTMX**, and **Tailwind CSS**, featuring an ultra-sleek dark cinematic UI design.
+Watch Wise is a modern, high-performance web application for movie and TV series recommendations built with **Python 3**, **Django 4**, **HTMX**, and **Tailwind CSS**, featuring an ultra-sleek dark cinematic UI design.
 
 ---
 

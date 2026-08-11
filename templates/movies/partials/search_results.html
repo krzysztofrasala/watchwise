@@ -6,7 +6,7 @@
         class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors group"
         hx-get="{% url 'movie_modal_partial' item.movie_id %}"
         hx-target="#movie-modal-container"
-        onclick="document.getElementById('search-results-dropdown').innerHTML = '';"
+        hx-on::after-request="document.getElementById('search-results-dropdown').innerHTML = '';"
     >
         <img src="{{ item.poster_url }}" alt="{{ item.title }}" class="w-11 h-16 object-cover rounded-lg shrink-0 border border-white/10 shadow">
         <div class="flex-1 min-w-0">
