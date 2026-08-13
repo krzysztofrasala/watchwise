@@ -3,7 +3,7 @@ services:
     name: watchwise
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn config.wsgi:application
+    startCommand: python manage.py migrate && gunicorn config.wsgi:application
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
