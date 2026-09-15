@@ -113,3 +113,67 @@ def set_movie_rating(session: dict[str, Any], movie_id: int, stars: int) -> dict
     if hasattr(session, "modified"):
         session.modified = True
     return ratings
+
+
+def export_profiles_data(session: dict[str, Any]) -> dict[str, Any]:
+    """Return exportable JSON-safe dictionary of user profiles, ratings, and watchlists."""
+    get_profile_data(session)
+    return {
+        "app": "WatchWise",
+        "version": "2.0",
+        "active_profile": get_active_profile_name(session),
+        "profiles": session.get("profiles", {}),
+    }
+
+
+def import_profiles_data(session: dict[str, Any], data: dict[str, Any]) -> bool:
+    """Validate and import profiles data into the user session."""
+    if not isinstance(data, dict):
+        return False
+    incoming_profiles = data.get("profiles")
+    if not isinstance(incoming_profiles, dict) or not incoming_profiles:
+        return False
+
+    clean_profiles = {}
+    for name, p_data in incoming_profiles.items():
+        if not isinstance(p_data, dict):
+            continue
+        clean_name = str(name).strip()
+        if not clean_name:
+            continue
+
+        raw_watchlist = p_data.get("watchlist", [])
+        watchlist = []
+        for x in raw_watchlist:
+            try:
+                watchlist.append(int(x))
+            except (ValueError, TypeError):
+                pass
+
+        raw_ratings = p_data.get("ratings", {})
+        ratings = {}
+        if isinstance(raw_ratings, dict):
+            for mid, stars in raw_ratings.items():
+                try:
+                    ratings[int(mid)] = min(5, max(1, int(stars)))
+                except (ValueError, TypeError):
+                    pass
+
+        clean_profiles[clean_name] = {
+            "watchlist": watchlist,
+            "ratings": ratings,
+        }
+
+    if not clean_profiles:
+        return False
+
+    session["profiles"] = clean_profiles
+    active = str(data.get("active_profile", "")).strip()
+    if active in clean_profiles:
+        session["active_profile"] = active
+    else:
+        session["active_profile"] = next(iter(clean_profiles.keys()))
+
+    if hasattr(session, "modified"):
+        session.modified = True
+    return True

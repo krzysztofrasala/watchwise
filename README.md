@@ -13,11 +13,14 @@ Watch Wise is a modern, high-performance web application for movie and TV series
 ## 🌟 Key Features
 
 - 🚀 **ML-Powered Recommendation Engine**: Uses TF-IDF vectorization, dense sentence-embeddings, and Cosine Similarity for intelligent content-based movie recommendations.
+- 🤖 **Google Gemini AI Cinema Assistant**: Powered by `google-genai` (`gemini-2.5-flash`) for nuanced natural language query parsing (e.g. *"dark 90s psychological thrillers like David Fincher"*), with automatic regex fallback when no API key is provided.
+- 🔗 **Deep-linking & Direct URLs (`/movie/<id>/`)**: Direct shareable movie URLs with full page rendering, dynamic URL synchronization via `hx-push-url`, and seamless browser history support.
+- 💾 **Profile Backup & Restore (JSON)**: One-click export and import of all user profiles, ratings, and watchlists without requiring account registration or persistent database storage.
+- 📺 **VOD Provider Badges**: Miniature platform logos (Netflix, Max, Disney+, Prime Video, etc.) rendered on posters with direct streaming links.
+- ♾️ **HTMX Infinite Scrolling**: Dynamic, smooth infinite scrolling in **Discover Pro** triggered via `hx-trigger="revealed"`.
 - ⚡ **HTMX Live Search & Real-time Auto-complete**: Fast, instant multi-search supporting both **Movies and TV Series** without full page reloads.
 - 🍿 **Interactive Movie & TV Show Modals**: Dynamic YouTube trailer player, cast photo grids, season & episode counts, and TMDB integration.
-- 🔗 **Direct VOD Deep-links & JustWatch Integration**: Clickable platform badges linking directly to titles on **Netflix**, **Disney+**, **Prime Video**, **Max (HBO)**, **Apple TV+**, **SkyShowtime**, and **JustWatch**.
 - 🎛️ **Discover Pro**: Advanced multi-criterion filtering by genre, original language (Polish, English, French, Spanish, Japanese, Korean, German, Italian, etc.), release year, and rating threshold.
-- 🤖 **AI Movie Assistant**: Conversational natural language query engine to find films matching any mood or description.
 - 🧬 **Taste DNA & Persona Profile**: Visual analytics (Chart.js) breaking down genre affinity, favorite eras, and cinema personas based on user ratings.
 - 👥 **Social Matchmaker**: Multi-profile compromise vector algorithm to compute joint recommendations for two viewers.
 - 🎲 **Movie Roulette**: Random movie selector filtered by chosen genre.
