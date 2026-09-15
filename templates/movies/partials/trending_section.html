@@ -51,6 +51,7 @@
             class="glass-card rounded-2xl overflow-hidden cursor-pointer flex flex-col justify-between group relative border border-white/10 hover:border-amber-500/50 transition-all duration-300 shadow-lg"
             hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
             hx-target="#movie-modal-container"
+            hx-push-url="/movie/{{ movie.movie_id }}/"
         >
             <!-- Poster Image -->
             <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">

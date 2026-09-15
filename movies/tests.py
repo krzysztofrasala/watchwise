@@ -89,3 +89,38 @@ class MoviesViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Popularne Seriale")
 
+    def test_movie_detail_view_and_htmx_partial(self):
+        # Direct browser request (Deep linking)
+        response_full = self.client.get(reverse('movie_modal_partial', args=[19995]))
+        self.assertEqual(response_full.status_code, 200)
+        self.assertContains(response_full, "Watch Wise")
+        self.assertContains(response_full, "Avatar")
+
+        # HTMX partial modal request
+        response_htmx = self.client.get(reverse('movie_modal_partial', args=[19995]), HTTP_HX_REQUEST='true')
+        self.assertEqual(response_htmx.status_code, 200)
+        self.assertContains(response_htmx, 'id="movie-modal"')
+
+    def test_profile_export_and_import(self):
+        # Rate movie and export
+        self.client.post(reverse('rate_movie', args=[19995]), {'stars': 5})
+        response = self.client.get(reverse('export_profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/json; charset=utf-8')
+        self.assertIn('attachment; filename="watchwise_profiles_backup.json"', response['Content-Disposition'])
+
+        # Import JSON backup
+        import io
+        backup_data = b'{"version": "2.0", "active_profile": "KinoFan", "profiles": {"KinoFan": {"watchlist": [19995], "ratings": {"19995": 5}}}}'
+        file_obj = io.BytesIO(backup_data)
+        file_obj.name = 'backup.json'
+        import_resp = self.client.post(reverse('import_profile'), {'profile_file': file_obj})
+        self.assertEqual(import_resp.status_code, 302)
+        self.assertEqual(self.client.session.get('active_profile'), 'KinoFan')
+
+    def test_discover_infinite_scroll_partial(self):
+        response = self.client.get(reverse('discover') + '?page=2', HTTP_HX_REQUEST='true')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "glass-card")
+
+

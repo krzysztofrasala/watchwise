@@ -6,6 +6,7 @@
             class="glass-card rounded-2xl overflow-hidden cursor-pointer flex flex-col justify-between group relative"
             hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
             hx-target="#movie-modal-container"
+            hx-push-url="/movie/{{ movie.movie_id }}/"
         >
             <!-- Poster image -->
             <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
@@ -15,6 +16,17 @@
                 <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[11px] font-extrabold px-2 py-0.5 rounded-md border border-brand-gold/30 flex items-center gap-1 shadow-md">
                     <i data-lucide="star" class="w-3 h-3 fill-brand-gold"></i> {{ movie.vote_average }}
                 </div>
+
+                <!-- VOD Badges on Poster -->
+                {% if movie.vod_providers %}
+                <div class="absolute bottom-2 left-2 flex items-center gap-1 z-20 pointer-events-none">
+                    {% for prov in movie.vod_providers|slice:":3" %}
+                    {% if prov.logo_url %}
+                    <img src="{{ prov.logo_url }}" alt="{{ prov.name }}" class="w-4 h-4 rounded-md shadow border border-white/20 object-cover" title="{{ prov.name }}">
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
 
                 <!-- Hover Overlay Icon -->
                 <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
