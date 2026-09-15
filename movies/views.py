@@ -1,4 +1,6 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from django.core.cache import cache
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
@@ -239,18 +241,31 @@ def watchlist(request):
     watchlist_ids = profiles.get_active_watchlist(request.session)
     ratings = profiles.get_active_ratings(request.session)
 
-    movies = []
+    parsed_ids = []
     for mid in watchlist_ids:
         try:
-            mid_int = int(mid)
+            parsed_ids.append(int(mid))
         except (ValueError, TypeError):
             continue
+
+    resolved_movies: dict[int, dict] = {}
+    missing_ids: list[int] = []
+
+    # 1. Fast O(1) lookup in local dataset
+    for mid_int in parsed_ids:
         m = services.get_movie_by_id(mid_int)
-        if not m:
-            tmdb_info = tmdb.fetch_movie_details(mid_int, lang=lang)
+        if m:
+            resolved_movies[mid_int] = dict(m)
+        else:
+            missing_ids.append(mid_int)
+
+    # 2. Parallel fetch for items outside local dataset (e.g. TV series or TMDB-only movies)
+    if missing_ids:
+        def _fetch_external(mid: int):
+            tmdb_info = tmdb.fetch_movie_details(mid, lang=lang)
             if tmdb_info:
-                m = {
-                    "movie_id": mid_int,
+                return mid, {
+                    "movie_id": mid,
                     "title": tmdb_info.get("title", ""),
                     "year": tmdb_info.get("year"),
                     "poster_path": tmdb_info.get("poster_path"),
@@ -260,6 +275,17 @@ def watchlist(request):
                     "vote_average": tmdb_info.get("vote_average", 0.0),
                     "overview": tmdb_info.get("overview", ""),
                 }
+            return mid, None
+
+        with ThreadPoolExecutor(max_workers=min(len(missing_ids), 8)) as executor:
+            for mid, m in executor.map(_fetch_external, missing_ids):
+                if m:
+                    resolved_movies[mid] = m
+
+    # 3. Assemble in original order
+    movies = []
+    for mid_int in parsed_ids:
+        m = resolved_movies.get(mid_int)
         if m:
             prepare_movie_item(m)
             m["user_rating"] = ratings.get(m["movie_id"], 0)
@@ -338,8 +364,16 @@ def taste_dna(request):
     lang = ctx["current_lang"]
     ratings = profiles.get_active_ratings(request.session)
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    active_profile = profiles.get_active_profile_name(request.session)
 
-    taste_data = taste.compute_taste_profile(ratings, watchlist_ids, lang=lang)
+    import hashlib
+    raw_sig = f"{active_profile}:{sorted(ratings.items())}:{sorted(watchlist_ids)}:{lang}"
+    cache_key = f"taste_dna_{hashlib.md5(raw_sig.encode()).hexdigest()}"
+    taste_data = cache.get(cache_key)
+
+    if taste_data is None:
+        taste_data = taste.compute_taste_profile(ratings, watchlist_ids, lang=lang)
+        cache.set(cache_key, taste_data, timeout=60 * 60 * 24)
 
     ctx.update({
         "taste_data": taste_data,

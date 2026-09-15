@@ -1,0 +1,12 @@
+{
+  "name": "watchwise-cinescope",
+  "version": "2.0.0",
+  "description": "WatchWise movie recommendation system styles build",
+  "scripts": {
+    "build:css": "npx -y tailwindcss@3.4.17 -i static/css/input.css -o static/css/main.css --minify",
+    "watch:css": "npx -y tailwindcss@3.4.17 -i static/css/input.css -o static/css/main.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

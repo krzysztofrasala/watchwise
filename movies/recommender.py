@@ -22,8 +22,8 @@ def recommend_for_user(user_ratings: dict[int, int], watchlist_ids: list[int], t
 
     code = lang.upper().strip()
 
-    # Map movie_id to df row index
-    id_to_idx = {row["movie_id"]: i for i, row in movies_df.iterrows()}
+    # Precomputed map of movie_id to df row index (O(1))
+    id_to_idx = services.get_movie_indices()
 
     user_vector = None
     seen_indices = set()
@@ -224,15 +224,15 @@ def get_harmony_score(g1: str, g2: str) -> int:
 
 def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") -> list[dict[str, Any]]:
     code = lang.upper().strip()
-    movies_df, _, _ = services.load_dataset_with_vectors()
-    if movies_df.empty:
+    all_movies = services.get_all_movies()
+    if not all_movies:
         return []
 
     items = []
     g1_valid = g1 and g1 != "All"
     g2_valid = g2 and g2 != "All"
 
-    for _, row in movies_df.iterrows():
+    for row in all_movies:
         genres_raw = row.get("genres_list", [])
         genres = [str(g).lower() for g in genres_raw] if isinstance(genres_raw, (list, tuple)) else []
         if not genres:
