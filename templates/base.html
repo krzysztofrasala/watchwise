@@ -1,4 +1,4 @@
-{% load i18n_tags %}
+{% load static i18n_tags %}
 <!DOCTYPE html>
 <html lang="{% if current_lang == 'EN' %}en{% else %}pl{% endif %}" class="dark">
 <head>
@@ -11,31 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
     
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            gold: '#F5C518',
-                            goldHover: '#e0b20f',
-                            dark: '#0c0d10',
-                            card: '#14161d',
-                            cardBorder: 'rgba(255, 255, 255, 0.08)',
-                            accent: '#e50914',
-                        }
-                    },
-                    fontFamily: {
-                        outfit: ['Outfit', 'sans-serif'],
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Pre-built Minified Tailwind & Design System CSS -->
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
     
     <!-- HTMX CDN -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
@@ -45,47 +22,6 @@
 
     <!-- Chart.js CDN for Taste DNA -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0c0d10;
-            color: #f3f4f6;
-        }
-        h1, h2, h3, h4, .font-display {
-            font-family: 'Outfit', sans-serif;
-        }
-        .glass-panel {
-            background: rgba(20, 22, 29, 0.85);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .glass-card {
-            background: rgba(26, 29, 38, 0.6);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .glass-card:hover {
-            transform: translateY(-6px) scale(1.02);
-            border-color: rgba(245, 197, 24, 0.4);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 197, 24, 0.15);
-        }
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0c0d10;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #262936;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #F5C518;
-        }
-    </style>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-h-screen flex flex-col justify-between antialiased selection:bg-brand-gold selection:text-black">
 

@@ -1,13 +1,34 @@
 from __future__ import annotations
 import os
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from urllib.parse import quote
 from functools import lru_cache
 
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
 DEFAULT_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=500&auto=format&fit=crop"
-DEFAULT_API_KEY = "ab1463e72ed1ffeb683872b703ae2554"
+DEFAULT_API_KEY = ""
+
+_session: requests.Session | None = None
+
+
+def get_session() -> requests.Session:
+    """Thread-safe connection pooling session for TMDB requests."""
+    global _session
+    if _session is None:
+        _session = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            raise_on_status=False
+        )
+        adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=retries)
+        _session.mount("https://", adapter)
+        _session.mount("http://", adapter)
+    return _session
 
 # Provider IDs for popular VOD platforms in Poland / Global
 KNOWN_PROVIDERS = {
@@ -106,6 +127,8 @@ def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: s
 @lru_cache(maxsize=300)
 def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
     api_key = get_api_key()
+    if not api_key:
+        return None
     lang_map = {
         "PL": "pl-PL",
         "EN": "en-US",
@@ -125,13 +148,13 @@ def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
             "append_to_response": "videos,credits,watch/providers",
             "language": tmdb_lang
         }
-        res = requests.get(url, params=params, timeout=4)
+        res = get_session().get(url, params=params, timeout=4)
         is_tv = False
 
         # If movie not found, try TV show endpoint
         if res.status_code == 404:
             url = f"{BASE_URL}/tv/{movie_id}"
-            res = requests.get(url, params=params, timeout=4)
+            res = get_session().get(url, params=params, timeout=4)
             is_tv = True
 
         if res.status_code == 200:
@@ -149,7 +172,7 @@ def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
             if not trailer_key and tmdb_lang != "en-US":
                 try:
                     endpoint = "tv" if is_tv else "movie"
-                    v_res = requests.get(f"{BASE_URL}/{endpoint}/{movie_id}/videos", params={"api_key": api_key, "language": "en-US"}, timeout=3)
+                    v_res = get_session().get(f"{BASE_URL}/{endpoint}/{movie_id}/videos", params={"api_key": api_key, "language": "en-US"}, timeout=3)
                     if v_res.status_code == 200:
                         en_videos = v_res.json().get("results", [])
                         for v in en_videos:
@@ -248,6 +271,8 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
     if not query or len(query.strip()) < 2:
         return []
     api_key = get_api_key()
+    if not api_key:
+        return []
     lang_map = {
         "PL": "pl-PL",
         "EN": "en-US",
@@ -266,7 +291,7 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
             "language": tmdb_lang,
             "include_adult": False
         }
-        res = requests.get(url, params=params, timeout=4)
+        res = get_session().get(url, params=params, timeout=4)
         if res.status_code == 200:
             results = res.json().get("results", [])
             items = []
@@ -307,6 +332,8 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
 def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch trending movies or TV series from TMDB API."""
     api_key = get_api_key()
+    if not api_key:
+        return []
     lang_map = {
         "PL": "pl-PL",
         "EN": "en-US",
@@ -324,7 +351,7 @@ def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: st
             "api_key": api_key,
             "language": tmdb_lang,
         }
-        res = requests.get(url, params=params, timeout=4)
+        res = get_session().get(url, params=params, timeout=4)
         if res.status_code == 200:
             results = res.json().get("results", [])
             items = []
@@ -364,6 +391,8 @@ def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: st
 def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch upcoming movies from TMDB API."""
     api_key = get_api_key()
+    if not api_key:
+        return []
     lang_map = {
         "PL": "pl-PL",
         "EN": "en-US",
@@ -381,7 +410,7 @@ def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
             "language": tmdb_lang,
             "region": "PL",
         }
-        res = requests.get(url, params=params, timeout=4)
+        res = get_session().get(url, params=params, timeout=4)
         if res.status_code == 200:
             results = res.json().get("results", [])
             items = []

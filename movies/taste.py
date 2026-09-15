@@ -113,8 +113,7 @@ def compute_taste_profile(user_ratings: dict[int, int], watchlist_ids: list[int]
     genre_scores: dict[str, float] = {}
     decade_scores: dict[int, float] = {}
 
-    all_movies = services.get_all_movies()
-    id_to_movie = {m["movie_id"]: m for m in all_movies}
+    id_to_movie = services.get_movie_dict()
 
     total_rated = len(user_ratings)
     total_watchlist = len(watchlist_ids)

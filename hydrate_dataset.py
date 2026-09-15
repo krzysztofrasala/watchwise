@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import requests
 
-API_KEY = os.environ.get("TMDB_API_KEY", "ab1463e72ed1ffeb683872b703ae2554")
+API_KEY = os.environ.get("TMDB_API_KEY", "")
 BASE_URL = "https://api.themoviedb.org/3"
 DATA_DIR = "data"
 
