@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from django.core.cache import cache
 from . import tmdb
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -86,33 +87,53 @@ def load_dataset_with_vectors():
     return movies_df, vectors, is_dense
 
 
-def get_all_movies():
+@lru_cache(maxsize=1)
+def get_movie_indices() -> dict[int, int]:
+    """Precomputed mapping from movie_id to DataFrame row index."""
     movies_df, _ = load_dataset()
-    return movies_df.to_dict(orient="records")
+    return dict(zip(movies_df["movie_id"].astype(int), range(len(movies_df))))
+
+
+@lru_cache(maxsize=1)
+def get_movie_dict() -> dict[int, dict]:
+    """Precomputed mapping from movie_id to movie record dict for O(1) access."""
+    movies_df, _ = load_dataset()
+    records = movies_df.to_dict(orient="records")
+    return {int(m["movie_id"]): m for m in records}
+
+
+def get_all_movies():
+    """Return all movie records using cached dict values."""
+    return list(get_movie_dict().values())
 
 
 def get_movie_by_id(movie_id: int):
-    movies_df, _ = load_dataset()
-    match = movies_df[movies_df["movie_id"] == int(movie_id)]
-    if match.empty:
+    """O(1) movie lookup by movie_id."""
+    try:
+        return get_movie_dict().get(int(movie_id))
+    except (ValueError, TypeError):
         return None
-    return match.iloc[0].to_dict()
 
 
 def get_movie_by_index(idx: int):
-    movies_df, _ = load_dataset()
-    if 0 <= idx < len(movies_df):
-        return movies_df.iloc[idx].to_dict()
+    all_movies = get_all_movies()
+    if 0 <= idx < len(all_movies):
+        return all_movies[idx]
     return None
 
 
 def get_recommendations(movie_id: int, top_n: int = 10):
-    movies_df, neighbors = load_dataset()
-    match = movies_df[movies_df["movie_id"] == int(movie_id)]
-    if match.empty:
+    try:
+        mid = int(movie_id)
+    except (ValueError, TypeError):
         return []
 
-    idx = match.index[0]
+    id_to_idx = get_movie_indices()
+    idx = id_to_idx.get(mid)
+    if idx is None:
+        return []
+
+    movies_df, neighbors = load_dataset()
     indices_matrix = neighbors["indices"]
     scores_matrix = neighbors["scores"]
 
@@ -121,9 +142,10 @@ def get_recommendations(movie_id: int, top_n: int = 10):
     neighbor_scores = scores_matrix[idx][1:top_n+1]
 
     recommendations = []
+    all_movies = get_all_movies()
     for neighbor_idx, score in zip(neighbor_indices, neighbor_scores):
         if neighbor_idx < n_movies:
-            rec_row = movies_df.iloc[neighbor_idx].to_dict()
+            rec_row = dict(all_movies[neighbor_idx])
             rec_row["match_score"] = int(round(float(score) * 100))
             rec_row["similarity"] = rec_row["match_score"]
             rec_row["match_reason"] = "Wysokie podobieństwo tematyczne"
@@ -237,7 +259,12 @@ def get_random_movie(genre: str = None):
 
 
 def get_trending_content(category: str = "movies", lang: str = "PL") -> list[dict]:
-    """Fetch live trending content from TMDB with fallback to dataset."""
+    """Fetch live trending content from TMDB with fallback to dataset and 4h cache."""
+    cache_key = f"trending_{category}_{lang}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     if category == "tv":
         results = tmdb.fetch_trending(media_type="tv", time_window="day", lang=lang, limit=12)
     elif category == "upcoming":
@@ -252,5 +279,8 @@ def get_trending_content(category: str = "movies", lang: str = "PL") -> list[dic
             r["media_type"] = "movie"
             r["is_tv"] = False
             r["media_badge"] = "🎬 Film"
+
+    if results:
+        cache.set(cache_key, results, timeout=60 * 60 * 4)
     return results
 
