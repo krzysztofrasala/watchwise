@@ -69,6 +69,20 @@
                             {% endfor %}
                         </select>
                     </form>
+
+                    <!-- Profile JSON Backup / Restore -->
+                    <div class="flex items-center gap-1">
+                        <a href="{% url 'export_profile' %}" title="Eksportuj profile (JSON)" class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-brand-gold border border-white/10 transition-all">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        </a>
+                        <form action="{% url 'import_profile' %}" method="POST" enctype="multipart/form-data" class="inline">
+                            {% csrf_token %}
+                            <label title="Importuj profile (JSON)" class="cursor-pointer p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-emerald-400 border border-white/10 transition-all flex items-center">
+                                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                                <input type="file" name="profile_file" accept=".json" onchange="this.form.submit()" class="hidden">
+                            </label>
+                        </form>
+                    </div>
                 </div>
             </div>
 
@@ -226,6 +240,22 @@
                 if (searchDropdown) {
                     searchDropdown.innerHTML = '';
                 }
+                closeMovieModal();
+            }
+        });
+
+        function closeMovieModal() {
+            const modal = document.getElementById('movie-modal');
+            if (modal) modal.remove();
+            if (window.location.pathname.startsWith('/movie/')) {
+                window.history.pushState({}, '', '/');
+            }
+        }
+
+        window.addEventListener('popstate', function() {
+            const modal = document.getElementById('movie-modal');
+            if (modal && !window.location.pathname.startsWith('/movie/')) {
+                modal.remove();
             }
         });
     </script>

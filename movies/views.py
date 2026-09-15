@@ -207,7 +207,14 @@ def movie_modal_partial(request, movie_id):
         "user_rating": user_rating,
         "current_lang": lang,
     }
-    return render(request, "movies/partials/movie_modal.html", context)
+
+    if request.headers.get("HX-Request"):
+        return render(request, "movies/partials/movie_modal.html", context)
+
+    # Direct browser link (/movie/<id>/)
+    ctx = get_base_context(request)
+    ctx.update(context)
+    return render(request, "movies/movie_detail.html", ctx)
 
 
 def roulette(request):
@@ -332,6 +339,8 @@ def discover(request):
     year_min = request.GET.get("year_min")
     year_max = request.GET.get("year_max")
     sort_by = request.GET.get("sort_by", "vote_desc")
+    page = int(request.GET.get("page", 1))
+    per_page = 24
 
     filtered = services.filter_movies(
         genre=genre,
@@ -340,8 +349,8 @@ def discover(request):
         vote_min=vote_min,
         language=language,
         sort_by=sort_by,
-        page=int(request.GET.get("page", 1)),
-        per_page=24
+        page=page,
+        per_page=per_page
     )
 
     ratings = profiles.get_active_ratings(request.session)
@@ -349,13 +358,26 @@ def discover(request):
         prepare_movie_item(item)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
 
+    has_next = page < filtered["total_pages"]
+    next_page = page + 1 if has_next else None
+
     ctx.update({
         "genres": services.get_all_genres(),
         "movies": filtered["items"],
         "total_count": filtered["total_count"],
+        "total_pages": filtered["total_pages"],
+        "page": page,
+        "has_next": has_next,
+        "next_page": next_page,
         "selected_genre": genre,
         "selected_language": language,
+        "vote_min": vote_min,
+        "sort_by": sort_by,
     })
+
+    if request.headers.get("HX-Request") and request.GET.get("page"):
+        return render(request, "movies/partials/discover_grid.html", ctx)
+
     return render(request, "movies/discover.html", ctx)
 
 
@@ -501,4 +523,29 @@ def create_profile(request):
 def switch_language(request):
     lang_code = request.POST.get("lang", "PL").strip()
     i18n.set_lang(request.session, lang_code)
+    return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+def export_profile(request):
+    """Export current profiles and watchlists as downloadable JSON."""
+    data = profiles.export_profiles_data(request.session)
+    response = HttpResponse(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        content_type="application/json; charset=utf-8"
+    )
+    response["Content-Disposition"] = 'attachment; filename="watchwise_profiles_backup.json"'
+    return response
+
+
+@require_POST
+def import_profile(request):
+    """Import profiles from uploaded JSON file."""
+    uploaded_file = request.FILES.get("profile_file")
+    if uploaded_file:
+        try:
+            content = uploaded_file.read().decode("utf-8")
+            data = json.loads(content)
+            profiles.import_profiles_data(request.session, data)
+        except Exception:
+            pass
     return redirect(request.META.get("HTTP_REFERER", "/"))

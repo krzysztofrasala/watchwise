@@ -22,6 +22,12 @@
             {% if parsed.vote_min %}<span class="bg-brand-gold/20 text-brand-gold border border-brand-gold/30 px-2 py-0.5 rounded-full text-[11px] font-bold">⭐ {{ parsed.vote_min }}+</span>{% endif %}
         </div>
 
+        {% if parsed.ai_explanation %}
+        <p class="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl font-medium">
+            ✨ {{ parsed.ai_explanation }}
+        </p>
+        {% endif %}
+
         {% if movies %}
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
             {% for movie in movies %}

@@ -40,8 +40,8 @@ LANGUAGE_KEYWORDS = {
 }
 
 
-def parse_natural_query(query_text: str) -> dict[str, Any]:
-    """Parse text into filter arguments (genre, year_min, year_max, vote_min, language, sort_by)."""
+def parse_natural_query_regex(query_text: str) -> dict[str, Any]:
+    """Parse text into filter arguments using keywords and regex."""
     q = query_text.lower()
 
     matched_genre = "All"
@@ -97,3 +97,62 @@ def parse_natural_query(query_text: str) -> dict[str, Any]:
         "sort_by": sort_by,
         "language": language,
     }
+
+
+def parse_natural_query_gemini(query_text: str, api_key: str) -> dict[str, Any] | None:
+    """Use Google Gemini to extract nuanced cinema filters from natural language."""
+    try:
+        import json
+        from google import genai
+
+        client = genai.Client(api_key=api_key)
+        prompt = (
+            "You are an expert movie librarian. Extract structured movie search parameters from this user query:\n"
+            f'"{query_text}"\n\n'
+            "Valid genres: Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Family, Fantasy, "
+            "History, Horror, Music, Mystery, Romance, Science Fiction, TV Movie, Thriller, War, Western, All.\n"
+            "Valid ISO languages: en, pl, fr, es, ja, ko, de, it, or null.\n"
+            "Valid sort_by: vote_desc, vote_asc, year_desc, year_asc, popularity.\n\n"
+            "Return ONLY a JSON object with this exact schema:\n"
+            "{\n"
+            '  "genre": "Genre or All",\n'
+            '  "year_min": integer or null,\n'
+            '  "year_max": integer or null,\n'
+            '  "vote_min": float or null,\n'
+            '  "sort_by": "vote_desc",\n'
+            '  "language": "code or null",\n'
+            '  "ai_explanation": "one short sentence in Polish or English matching user language explaining what kind of movies to look for"\n'
+            "}"
+        )
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+        data = json.loads(text)
+        if isinstance(data, dict) and "genre" in data:
+            return {
+                "genre": data.get("genre", "All"),
+                "year_min": data.get("year_min"),
+                "year_max": data.get("year_max"),
+                "vote_min": float(data["vote_min"]) if data.get("vote_min") is not None else None,
+                "sort_by": data.get("sort_by", "vote_desc"),
+                "language": data.get("language"),
+                "ai_explanation": data.get("ai_explanation", ""),
+            }
+    except Exception:
+        pass
+    return None
+
+
+def parse_natural_query(query_text: str) -> dict[str, Any]:
+    """Parse text query using Gemini API if key is set, with seamless fallback to regex."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if api_key:
+        result = parse_natural_query_gemini(query_text, api_key)
+        if result:
+            return result
+    return parse_natural_query_regex(query_text)
