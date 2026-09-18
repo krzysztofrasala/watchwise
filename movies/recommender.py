@@ -14,8 +14,14 @@ def recommend_movie(movie_id: int, top_n: int = TOP_N) -> list[dict[str, Any]]:
     return services.get_recommendations(movie_id, top_n=top_n)
 
 
-def recommend_for_user(user_ratings: dict[int, int], watchlist_ids: list[int], top_n: int = TOP_N, lang: str = "PL") -> list[dict[str, Any]]:
-    """Generate personalized recommendations (V_user) based on ratings and watchlist."""
+def recommend_for_user(
+    user_ratings: dict[int, int],
+    watchlist_ids: list[int],
+    top_n: int = TOP_N,
+    lang: str = "PL",
+    watched_ids: list[int] = None,
+) -> list[dict[str, Any]]:
+    """Generate personalized recommendations (V_user) based on ratings, watchlist, and watched history."""
     movies_df, vectors, is_dense = services.load_dataset_with_vectors()
     if movies_df.empty or vectors is None:
         return []
@@ -28,6 +34,16 @@ def recommend_for_user(user_ratings: dict[int, int], watchlist_ids: list[int], t
     user_vector = None
     seen_indices = set()
     user_top_genres: set[str] = set()
+
+    # Exclude already watched movies
+    if watched_ids:
+        for mid in watched_ids:
+            try:
+                mid_int = int(mid)
+                if mid_int in id_to_idx:
+                    seen_indices.add(id_to_idx[mid_int])
+            except (ValueError, TypeError):
+                continue
 
     # 1. Process rated movies
     for mid, stars in user_ratings.items():

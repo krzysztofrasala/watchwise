@@ -123,4 +123,98 @@ class MoviesViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "glass-card")
 
+    def test_toggle_watched_endpoint_and_recommendation_exclusion(self):
+        # 1. Add movie to watchlist
+        self.client.post(reverse('toggle_watchlist', args=[19995]))
+        self.assertEqual(len(self.client.session.get('profiles', {}).get('Główny', {}).get('watchlist', [])), 1)
+
+        # 2. Toggle watched: marks as watched and removes from to-watch watchlist
+        res = self.client.post(reverse('toggle_watched', args=[19995]))
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data['marked'])
+        self.assertEqual(data['watched_count'], 1)
+        self.assertEqual(data['watchlist_count'], 0)
+
+        # Session verification
+        p_data = self.client.session.get('profiles', {}).get('Główny', {})
+        self.assertIn(19995, p_data.get('watched', []))
+        self.assertNotIn(19995, p_data.get('watchlist', []))
+
+        # Recommender test: Watched movie 19995 must be excluded from recommendations
+        recs = recommender.recommend_for_user(
+            user_ratings={11: 5},
+            watchlist_ids=[],
+            top_n=10,
+            watched_ids=[19995]
+        )
+        rec_ids = [r['movie_id'] for r in recs]
+        self.assertNotIn(19995, rec_ids)
+
+    def test_vod_subscriptions_and_modal_partial(self):
+        # Test VOD modal partial
+        modal_res = self.client.get(reverse('vod_subscription_modal'))
+        self.assertEqual(modal_res.status_code, 200)
+        self.assertContains(modal_res, 'Netflix')
+        self.assertContains(modal_res, 'Disney+')
+
+        # Test setting subscriptions
+        set_res = self.client.post(reverse('set_vod_subscriptions'), {'services': ['8', '337']})
+        self.assertEqual(set_res.status_code, 302)
+        active_subs = profiles.get_active_vod_subscriptions(self.client.session)
+        self.assertEqual(active_subs, [8, 337])
+
+    def test_watchlist_grid_partial_and_filtering(self):
+        # Add a movie to watchlist and test grid partial
+        self.client.post(reverse('toggle_watchlist', args=[19995]))
+        grid_res = self.client.get(reverse('watchlist_grid_partial') + '?tab=watchlist&vod=all')
+        self.assertEqual(grid_res.status_code, 200)
+        self.assertContains(grid_res, 'Avatar')
+        self.assertContains(grid_res, 'id="watchlist-grid-container"')
+
+        # Test watched tab empty state
+        watched_res = self.client.get(reverse('watchlist_grid_partial') + '?tab=watched&vod=all')
+        self.assertEqual(watched_res.status_code, 200)
+        self.assertContains(watched_res, 'Brak obejrzanych filmów')
+
+    def test_profile_export_import_with_watched_and_vod(self):
+        # Set up profile with watched and vod
+        self.client.post(reverse('toggle_watched', args=[19995]))
+        self.client.post(reverse('set_vod_subscriptions'), {'services': ['8', '119']})
+
+        # Export
+        exp_res = self.client.get(reverse('export_profile'))
+        self.assertEqual(exp_res.status_code, 200)
+        exp_data = exp_res.json()
+        self.assertIn('watched', exp_data['profiles']['Główny'])
+        self.assertIn('vod_subscriptions', exp_data['profiles']['Główny'])
+        self.assertEqual(exp_data['profiles']['Główny']['watched'], [19995])
+        self.assertEqual(exp_data['profiles']['Główny']['vod_subscriptions'], [8, 119])
+
+        # Import with new format
+        import io
+        import json
+        new_backup = json.dumps({
+            "version": "2.1",
+            "active_profile": "Cinephile",
+            "profiles": {
+                "Cinephile": {
+                    "watchlist": [278],
+                    "watched": [19995],
+                    "ratings": {"19995": 5},
+                    "vod_subscriptions": [8, 337]
+                }
+            }
+        }).encode('utf-8')
+        file_obj = io.BytesIO(new_backup)
+        file_obj.name = 'backup_v21.json'
+        imp_res = self.client.post(reverse('import_profile'), {'profile_file': file_obj})
+        self.assertEqual(imp_res.status_code, 302)
+
+        session = self.client.session
+        self.assertEqual(profiles.get_active_profile_name(session), "Cinephile")
+        self.assertEqual(profiles.get_active_watched(session), [19995])
+        self.assertEqual(profiles.get_active_vod_subscriptions(session), [8, 337])
+
+
 

@@ -95,16 +95,33 @@ Wszystkie zidentyfikowane wąskie gardła i braki zostały pomyślnie rozwiązan
 
 ---
 
+## 🍿 Faza 4: Inteligentna Watchlista & Filtry Subskrypcji VOD — ✅ ZREALIZOWANE
+
+1. ✅ **Zarządzanie subskrypcjami VOD użytkownika**:
+   - Modal wyboru serwisów streamingowych ([templates/movies/partials/vod_subscriptions_modal.html](file:///Users/krzysztofrasala/Developer/projects/github/cinescope-django/templates/movies/partials/vod_subscriptions_modal.html)) z logotypami platform (Netflix, Max, Disney+, Prime Video, Apple TV+, SkyShowtime).
+   - Zapisywanie subskrypcji w profilu sesji (`profiles.py`) i pełna synchronizacja przy eksporcie/imporcie JSON.
+
+2. ✅ **Zakładki „Do obejrzenia” vs „Obejrzane” (Watched History)**:
+   - Nowy stan filmu: oznaczanie jako *"Obejrzane"* z poziomu karty na liście, modala oraz widoku pełnostronicowego `/movie/<id>/`.
+   - Automatyczne wykluczanie obejrzanych filmów z sekcji rekomendacji algorytmicznych na stronie głównej (`recommender.py`).
+   - Dynamiczne liczniki seansów w czasie rzeczywistym (`watchedChanged` HTMX trigger).
+
+3. ✅ **Filtrowanie Watchlisty wg platform VOD**:
+   - Paski filtrów w [templates/movies/partials/watchlist_grid.html](file:///Users/krzysztofrasala/Developer/projects/github/cinescope-django/templates/movies/partials/watchlist_grid.html): *Wszystkie*, *⭐ Moje VOD* oraz filtry per konkretny serwis z licznikami dostępnych tytułów.
+   - Błyskawiczne przełączanie bez przeładowywania strony przez HTMX partiale.
+
+---
+
 ## 🛠️ Jak Wznowić Pracę Przy Następnej Sesji
 
 Gdy wrócisz do projektu:
-1. **Wszystkie 3 Fazy zostały ukończone i wdrożone.**
+1. **Wszystkie 4 Fazy zostały ukończone i wdrożone.**
 2. **Kluczowe polecenia deweloperskie:**
    - Uruchomienie serwera: `./venv/bin/python manage.py runserver 8000`
-   - Testy jednostkowe: `./venv/bin/python manage.py test` (17 testów przechodzi pomyślnie w ~0.27s)
+   - Testy jednostkowe: `./venv/bin/python manage.py test` (21 testów przechodzi pomyślnie w ~0.29s)
    - Przebudowa stylów CSS (w razie edycji szablonów): `npm run build:css`
 3. **Pomysły na kolejne usprawnienia (Backlog):**
+   - PWA (Progressive Web App) z obsługą offline i instalacją na telefonie jako aplikacja natywna.
+   - Movie Roulette z bezpośrednim filtrem platform VOD użytkownika.
    - Integracja z bazą danych PostgreSQL (zamiast SQLite) na produkcji.
-   - PWA (Progressive Web App) z obsługą offline i instalacją na telefonie.
-   - Integracja z API zwiastunów bez konieczności opuszczania aplikacji na urządzeniach mobilnych.
 
