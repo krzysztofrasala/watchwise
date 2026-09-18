@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 DEFAULT_PROFILE_NAME = "Główny"
+DEFAULT_VOD_SUBSCRIPTIONS = [8, 337, 1899]  # Netflix, Disney+, Max
 
 
 def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
@@ -15,11 +16,25 @@ def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
         session["profiles"] = {
             DEFAULT_PROFILE_NAME: {
                 "watchlist": [],
+                "watched": [],
                 "ratings": {},  # movie_id -> stars (1-5)
+                "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
             }
         }
         session["active_profile"] = DEFAULT_PROFILE_NAME
         if hasattr(session, "modified"):
+            session.modified = True
+    else:
+        # Backwards compatibility: ensure every profile has watched & vod_subscriptions
+        updated = False
+        for p_name, p_data in session["profiles"].items():
+            if "watched" not in p_data:
+                p_data["watched"] = []
+                updated = True
+            if "vod_subscriptions" not in p_data:
+                p_data["vod_subscriptions"] = list(DEFAULT_VOD_SUBSCRIPTIONS)
+                updated = True
+        if updated and hasattr(session, "modified"):
             session.modified = True
 
     return session["profiles"]
@@ -46,7 +61,9 @@ def add_profile(session: dict[str, Any], name: str) -> bool:
 
     profiles[clean_name] = {
         "watchlist": [],
+        "watched": [],
         "ratings": {},
+        "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
     }
     session["profiles"] = profiles
     session["active_profile"] = clean_name
@@ -66,7 +83,12 @@ def toggle_watchlist_item(session: dict[str, Any], movie_id: int) -> tuple[bool,
     active = get_active_profile_name(session)
 
     if active not in profiles:
-        profiles[active] = {"watchlist": [], "ratings": {}}
+        profiles[active] = {
+            "watchlist": [],
+            "watched": [],
+            "ratings": {},
+            "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
+        }
 
     watchlist = profiles[active]["watchlist"]
     mid = int(movie_id)
@@ -87,6 +109,95 @@ def toggle_watchlist_item(session: dict[str, Any], movie_id: int) -> tuple[bool,
     return added, len(watchlist)
 
 
+def get_active_watched(session: dict[str, Any]) -> list[int]:
+    profiles = get_profile_data(session)
+    active = get_active_profile_name(session)
+    return profiles.get(active, {}).get("watched", [])
+
+
+def toggle_watched_item(session: dict[str, Any], movie_id: int) -> tuple[bool, int]:
+    """Toggle movie watched status. When marking as watched, optionally removes from to-watch watchlist."""
+    profiles = get_profile_data(session)
+    active = get_active_profile_name(session)
+
+    if active not in profiles:
+        profiles[active] = {
+            "watchlist": [],
+            "watched": [],
+            "ratings": {},
+            "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
+        }
+
+    watched = profiles[active].get("watched", [])
+    watchlist = profiles[active].get("watchlist", [])
+    mid = int(movie_id)
+
+    if mid in watched:
+        watched.remove(mid)
+        marked = False
+    else:
+        watched.append(mid)
+        marked = True
+        # If moving to watched, remove from to-watch watchlist
+        if mid in watchlist:
+            watchlist.remove(mid)
+
+    profiles[active]["watched"] = watched
+    profiles[active]["watchlist"] = watchlist
+    session["profiles"] = profiles
+    session["watchlist"] = watchlist
+    if hasattr(session, "modified"):
+        session.modified = True
+    return marked, len(watched)
+
+
+def get_active_vod_subscriptions(session: dict[str, Any]) -> list[int]:
+    profiles = get_profile_data(session)
+    active = get_active_profile_name(session)
+    return profiles.get(active, {}).get("vod_subscriptions", list(DEFAULT_VOD_SUBSCRIPTIONS))
+
+
+def set_vod_subscriptions(session: dict[str, Any], provider_ids: list[int]) -> list[int]:
+    profiles = get_profile_data(session)
+    active = get_active_profile_name(session)
+
+    if active not in profiles:
+        profiles[active] = {
+            "watchlist": [],
+            "watched": [],
+            "ratings": {},
+            "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
+        }
+
+    clean_ids = []
+    for pid in provider_ids:
+        try:
+            clean_ids.append(int(pid))
+        except (ValueError, TypeError):
+            continue
+
+    profiles[active]["vod_subscriptions"] = clean_ids
+    session["profiles"] = profiles
+    if hasattr(session, "modified"):
+        session.modified = True
+    return clean_ids
+
+
+def toggle_vod_subscription(session: dict[str, Any], provider_id: int) -> tuple[bool, list[int]]:
+    subs = get_active_vod_subscriptions(session)
+    pid = int(provider_id)
+
+    if pid in subs:
+        subs.remove(pid)
+        enabled = False
+    else:
+        subs.append(pid)
+        enabled = True
+
+    set_vod_subscriptions(session, subs)
+    return enabled, subs
+
+
 def get_active_ratings(session: dict[str, Any]) -> dict[int, int]:
     profiles = get_profile_data(session)
     active = get_active_profile_name(session)
@@ -98,7 +209,12 @@ def set_movie_rating(session: dict[str, Any], movie_id: int, stars: int) -> dict
     active = get_active_profile_name(session)
 
     if active not in profiles:
-        profiles[active] = {"watchlist": [], "ratings": {}}
+        profiles[active] = {
+            "watchlist": [],
+            "watched": [],
+            "ratings": {},
+            "vod_subscriptions": list(DEFAULT_VOD_SUBSCRIPTIONS),
+        }
 
     ratings = profiles[active]["ratings"]
     mid = int(movie_id)
@@ -116,11 +232,11 @@ def set_movie_rating(session: dict[str, Any], movie_id: int, stars: int) -> dict
 
 
 def export_profiles_data(session: dict[str, Any]) -> dict[str, Any]:
-    """Return exportable JSON-safe dictionary of user profiles, ratings, and watchlists."""
+    """Return exportable JSON-safe dictionary of user profiles, ratings, watchlists, watched, and VOD subscriptions."""
     get_profile_data(session)
     return {
         "app": "WatchWise",
-        "version": "2.0",
+        "version": "2.1",
         "active_profile": get_active_profile_name(session),
         "profiles": session.get("profiles", {}),
     }
@@ -150,6 +266,22 @@ def import_profiles_data(session: dict[str, Any], data: dict[str, Any]) -> bool:
             except (ValueError, TypeError):
                 pass
 
+        raw_watched = p_data.get("watched", [])
+        watched = []
+        for x in raw_watched:
+            try:
+                watched.append(int(x))
+            except (ValueError, TypeError):
+                pass
+
+        raw_subs = p_data.get("vod_subscriptions", list(DEFAULT_VOD_SUBSCRIPTIONS))
+        vod_subs = []
+        for x in raw_subs:
+            try:
+                vod_subs.append(int(x))
+            except (ValueError, TypeError):
+                pass
+
         raw_ratings = p_data.get("ratings", {})
         ratings = {}
         if isinstance(raw_ratings, dict):
@@ -161,7 +293,9 @@ def import_profiles_data(session: dict[str, Any], data: dict[str, Any]) -> bool:
 
         clean_profiles[clean_name] = {
             "watchlist": watchlist,
+            "watched": watched,
             "ratings": ratings,
+            "vod_subscriptions": vod_subs,
         }
 
     if not clean_profiles:
