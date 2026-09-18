@@ -41,6 +41,21 @@ KNOWN_PROVIDERS = {
     1773: {"name": "SkyShowtime", "logo": "/77zL1G9g9M9k9J9k.jpg"},
 }
 
+SUPPORTED_VOD_SERVICES = [
+    {"id": 8, "name": "Netflix", "logo_url": "https://image.tmdb.org/t/p/w92/pbpMk2JmcoNnQwx5JGp8jWBDjeW.jpg", "badge_color": "#E50914"},
+    {"id": 1899, "name": "Max", "logo_url": "https://image.tmdb.org/t/p/w92/jse515m3uB8g4t3zS7d0A1b9.jpg", "badge_color": "#002BE7"},
+    {"id": 337, "name": "Disney+", "logo_url": "https://image.tmdb.org/t/p/w92/97yvRBw1GzX7fT5Y2j7kM8q6Qx.jpg", "badge_color": "#113CCF"},
+    {"id": 119, "name": "Prime Video", "logo_url": "https://image.tmdb.org/t/p/w92/p5117uVzD6nF14l4lKkE4o25X8k.jpg", "badge_color": "#00A8E1"},
+    {"id": 350, "name": "Apple TV+", "logo_url": "https://image.tmdb.org/t/p/w92/2E03pXt88mPuvE2M97w6J4lA1.jpg", "badge_color": "#A2AAAD"},
+    {"id": 1773, "name": "SkyShowtime", "logo_url": "https://image.tmdb.org/t/p/w92/77zL1G9g9M9k9J9k.jpg", "badge_color": "#FFC700"},
+]
+
+
+def get_supported_vod_services() -> list[dict]:
+    """Return canonical list of supported streaming platforms with logos and brand colors."""
+    return list(SUPPORTED_VOD_SERVICES)
+
+
 def get_api_key():
     return os.environ.get("TMDB_API_KEY") or DEFAULT_API_KEY
 

@@ -224,6 +224,38 @@
             showToast(detail.title || detail.message || 'Sukces!', detail.message || '', detail.type || 'success');
         });
 
+        // Listen to watchlist and watched reactive state updates
+        document.body.addEventListener('watchlistChanged', function(e) {
+            const badge = document.getElementById('watchlist-badge');
+            if (badge && e.detail && typeof e.detail.count !== 'undefined') {
+                badge.innerText = e.detail.count;
+            }
+            const tabBadge = document.getElementById('watchlist-tab-count');
+            if (tabBadge && e.detail && typeof e.detail.count !== 'undefined') {
+                tabBadge.innerText = e.detail.count;
+            }
+        });
+
+        document.body.addEventListener('watchedChanged', function(e) {
+            const badge = document.getElementById('watchlist-badge');
+            if (badge && e.detail && typeof e.detail.watchlistCount !== 'undefined') {
+                badge.innerText = e.detail.watchlistCount;
+            }
+            const tabWatchlistBadge = document.getElementById('watchlist-tab-count');
+            if (tabWatchlistBadge && e.detail && typeof e.detail.watchlistCount !== 'undefined') {
+                tabWatchlistBadge.innerText = e.detail.watchlistCount;
+            }
+            const tabWatchedBadge = document.getElementById('watched-tab-count');
+            if (tabWatchedBadge && e.detail && typeof e.detail.watchedCount !== 'undefined') {
+                tabWatchedBadge.innerText = e.detail.watchedCount;
+            }
+        });
+
+        document.body.addEventListener('closeVodModal', function() {
+            const modal = document.getElementById('vod-modal');
+            if (modal) modal.remove();
+        });
+
         // Close search dropdown when clicking outside
         document.addEventListener('click', function(e) {
             const searchDropdown = document.getElementById('search-results-dropdown');
@@ -233,12 +265,16 @@
             }
         });
 
-        // Close search dropdown on Escape key
+        // Close search dropdown and modals on Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 const searchDropdown = document.getElementById('search-results-dropdown');
                 if (searchDropdown) {
                     searchDropdown.innerHTML = '';
+                }
+                const vodModal = document.getElementById('vod-modal');
+                if (vodModal) {
+                    vodModal.remove();
                 }
                 closeMovieModal();
             }

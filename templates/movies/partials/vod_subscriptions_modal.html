@@ -1,0 +1,112 @@
+{% load i18n_tags %}
+<div id="vod-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onclick="if(event.target === this) this.remove()">
+    <div class="glass-panel w-full max-w-lg rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden" onclick="event.stopPropagation()">
+        <!-- Background Ambient Glow -->
+        <div class="absolute -top-20 -right-20 w-48 h-48 bg-brand-gold/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-20 -left-20 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b border-white/10 pb-4 relative z-10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-brand-gold/20 text-brand-gold flex items-center justify-center border border-brand-gold/30 shadow-lg">
+                    <i data-lucide="tv" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black text-white tracking-tight">{{ "my_vod_subscriptions"|t:current_lang }}</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">{{ "vod_select_prompt"|t:current_lang }}</p>
+                </div>
+            </div>
+            <button 
+                type="button" 
+                onclick="document.getElementById('vod-modal').remove()" 
+                class="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white flex items-center justify-center transition-all border border-white/10"
+            >
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Form with Services Grid -->
+        <form 
+            hx-post="{% url 'set_vod_subscriptions' %}" 
+            hx-target="#watchlist-grid-container" 
+            hx-swap="outerHTML" 
+            class="space-y-6 relative z-10"
+        >
+            {% csrf_token %}
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {% for s in supported_services %}
+                <label 
+                    class="cursor-pointer group relative flex flex-col items-center p-3.5 rounded-2xl border transition-all duration-200 select-none
+                    {% if s.is_subscribed %}
+                    bg-white/10 border-brand-gold/60 shadow-lg shadow-brand-gold/10
+                    {% else %}
+                    bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20
+                    {% endif %}"
+                    style="{% if s.is_subscribed %}box-shadow: 0 0 15px {{ s.badge_color }}25; border-color: {{ s.badge_color }}99;{% endif %}"
+                >
+                    <input 
+                        type="checkbox" 
+                        name="services" 
+                        value="{{ s.id }}" 
+                        class="sr-only vod-checkbox"
+                        {% if s.is_subscribed %}checked{% endif %}
+                        onchange="toggleServiceCard(this)"
+                    >
+                    
+                    <!-- Selected Checkmark Badge -->
+                    <div class="vod-check-icon absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-all {% if s.is_subscribed %}bg-emerald-500 text-black scale-100{% else %}bg-white/10 text-transparent scale-75 opacity-0 group-hover:opacity-60{% endif %}">
+                        <i data-lucide="check" class="w-3 h-3 stroke-[3]"></i>
+                    </div>
+
+                    <!-- Platform Logo -->
+                    <div class="w-12 h-12 rounded-xl overflow-hidden shadow-md border border-white/15 mb-2 bg-black/40 flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <img src="{{ s.logo_url }}" alt="{{ s.name }}" class="w-full h-full object-cover">
+                    </div>
+
+                    <!-- Platform Name -->
+                    <span class="text-xs font-bold text-white tracking-wide text-center">{{ s.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- Modal Footer Actions -->
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+                <button 
+                    type="button" 
+                    onclick="document.getElementById('vod-modal').remove()" 
+                    class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition-all"
+                >
+                    Anuluj
+                </button>
+                <button 
+                    type="submit" 
+                    class="px-5 py-2.5 rounded-xl bg-brand-gold hover:bg-amber-400 text-black font-extrabold text-xs shadow-lg shadow-brand-gold/20 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    <span>{{ "save_vod_services"|t:current_lang }}</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+    function toggleServiceCard(cb) {
+        const card = cb.closest('label');
+        const icon = card.querySelector('.vod-check-icon');
+        if (cb.checked) {
+            card.classList.remove('bg-white/5', 'border-white/10');
+            card.classList.add('bg-white/10', 'border-brand-gold/60', 'shadow-lg');
+            icon.classList.remove('bg-white/10', 'text-transparent', 'scale-75', 'opacity-0');
+            icon.classList.add('bg-emerald-500', 'text-black', 'scale-100', 'opacity-100');
+        } else {
+            card.classList.remove('bg-white/10', 'border-brand-gold/60', 'shadow-lg');
+            card.classList.add('bg-white/5', 'border-white/10');
+            icon.classList.remove('bg-emerald-500', 'text-black', 'scale-100', 'opacity-100');
+            icon.classList.add('bg-white/10', 'text-transparent', 'scale-75', 'opacity-0');
+        }
+    }
+</script>

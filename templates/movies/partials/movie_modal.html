@@ -119,24 +119,44 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Watchlist Toggle Button -->
-                    <button 
-                        id="watchlist-toggle-btn"
-                        hx-post="{% url 'toggle_watchlist' movie.movie_id %}"
-                        hx-swap="none"
-                        onclick="toggleWatchlistBtn(this)"
-                        class="px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border
-                        {% if is_in_watchlist %}
-                        bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30
-                        {% else %}
-                        bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold
-                        {% endif %}"
-                    >
-                        <i data-lucide="bookmark" class="w-4 h-4"></i>
-                        <span id="watchlist-btn-text">
-                            {% if is_in_watchlist %}{{ "saved_to_watchlist"|t:current_lang }}{% else %}{{ "add_to_watchlist"|t:current_lang }}{% endif %}
-                        </span>
-                    </button>
+                    <!-- Action Buttons: Watchlist & Watched -->
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button 
+                            id="watchlist-toggle-btn"
+                            hx-post="{% url 'toggle_watchlist' movie.movie_id %}"
+                            hx-swap="none"
+                            onclick="toggleWatchlistBtn(this)"
+                            class="px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border
+                            {% if is_in_watchlist %}
+                            bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30
+                            {% else %}
+                            bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold
+                            {% endif %}"
+                        >
+                            <i data-lucide="bookmark" class="w-4 h-4"></i>
+                            <span id="watchlist-btn-text">
+                                {% if is_in_watchlist %}{{ "saved_to_watchlist"|t:current_lang }}{% else %}{{ "add_to_watchlist"|t:current_lang }}{% endif %}
+                            </span>
+                        </button>
+
+                        <button 
+                            id="watched-toggle-btn"
+                            hx-post="{% url 'toggle_watched' movie.movie_id %}"
+                            hx-swap="none"
+                            onclick="toggleWatchedBtn(this)"
+                            class="px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border
+                            {% if is_watched %}
+                            bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400 shadow-md shadow-emerald-500/20
+                            {% else %}
+                            bg-white/5 text-white border-white/10 hover:bg-emerald-500 hover:text-black hover:border-emerald-500
+                            {% endif %}"
+                        >
+                            <i data-lucide="check" class="w-4 h-4 stroke-[2.5]"></i>
+                            <span id="watched-btn-text">
+                                {% if is_watched %}{{ "marked_as_watched"|t:current_lang }}{% else %}{{ "mark_as_watched"|t:current_lang }}{% endif %}
+                            </span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -261,12 +281,33 @@
 
         if (textSpan.innerText.includes('Dodaj') || textSpan.innerText.includes('Add')) {
             textSpan.innerText = '{{ "saved_to_watchlist"|t:current_lang }}';
-            btn.className = 'px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30';
+            btn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30';
             badge.innerText = count + 1;
         } else {
             textSpan.innerText = '{{ "add_to_watchlist"|t:current_lang }}';
-            btn.className = 'px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold';
+            btn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold';
             badge.innerText = Math.max(0, count - 1);
+        }
+    }
+
+    function toggleWatchedBtn(btn) {
+        const textSpan = document.getElementById('watched-btn-text');
+        const isCurrentlyWatched = btn.classList.contains('bg-emerald-500');
+
+        if (isCurrentlyWatched) {
+            btn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-emerald-500 hover:text-black hover:border-emerald-500';
+            textSpan.innerText = '{{ "mark_as_watched"|t:current_lang }}';
+        } else {
+            btn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400 shadow-md shadow-emerald-500/20';
+            textSpan.innerText = '{{ "marked_as_watched"|t:current_lang }}';
+
+            // When marked as watched, update watchlist button state to not-in-watchlist
+            const wBtn = document.getElementById('watchlist-toggle-btn');
+            const wText = document.getElementById('watchlist-btn-text');
+            if (wBtn && wText) {
+                wBtn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold';
+                wText.innerText = '{{ "add_to_watchlist"|t:current_lang }}';
+            }
         }
     }
 

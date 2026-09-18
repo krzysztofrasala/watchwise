@@ -22,6 +22,7 @@ def get_base_context(request) -> dict:
     raw_active = profiles.get_active_profile_name(request.session)
     raw_profiles = list(profiles.get_profile_data(request.session).keys())
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
 
     default_trans = i18n.t("default_profile", lang)
     active_profile_display = default_trans if raw_active == "Główny" else raw_active
@@ -37,6 +38,7 @@ def get_base_context(request) -> dict:
         "all_profiles": raw_profiles,
         "all_profiles_display": all_profiles_display,
         "watchlist_count": len(watchlist_ids),
+        "watched_count": len(watched_ids),
     }
 
 
@@ -45,6 +47,7 @@ def index(request):
     lang = ctx["current_lang"]
 
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
     ratings = profiles.get_active_ratings(request.session)
 
     genres = services.get_all_genres()
@@ -70,7 +73,13 @@ def index(request):
                 if v:
                     hero_movie[k] = v
 
-    recommended_movies = recommender.recommend_for_user(ratings, watchlist_ids, top_n=10, lang=lang)
+    recommended_movies = recommender.recommend_for_user(
+        ratings,
+        watchlist_ids,
+        top_n=10,
+        lang=lang,
+        watched_ids=watched_ids,
+    )
     for rec in recommended_movies:
         prepare_movie_item(rec)
         rec["user_rating"] = ratings.get(rec["movie_id"], 0)
@@ -195,15 +204,18 @@ def movie_modal_partial(request, movie_id):
         prepare_movie_item(rec)
 
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
     ratings = profiles.get_active_ratings(request.session)
 
     is_in_watchlist = int(movie_id) in watchlist_ids
+    is_watched = int(movie_id) in watched_ids
     user_rating = ratings.get(int(movie_id), 0)
 
     context = {
         "movie": movie,
         "recommendations": recommendations,
         "is_in_watchlist": is_in_watchlist,
+        "is_watched": is_watched,
         "user_rating": user_rating,
         "current_lang": lang,
     }
@@ -242,14 +254,24 @@ def roulette(request):
     return render(request, "movies/roulette.html", ctx)
 
 
-def watchlist(request):
-    ctx = get_base_context(request)
-    lang = ctx["current_lang"]
+def get_watchlist_data(request) -> dict:
+    lang = i18n.get_lang(request.session)
+    tab = request.GET.get("tab", "watchlist").strip()
+    if tab not in ["watchlist", "watched"]:
+        tab = "watchlist"
+
+    vod_filter = request.GET.get("vod", "all").strip()
+
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
     ratings = profiles.get_active_ratings(request.session)
+    my_subscriptions = profiles.get_active_vod_subscriptions(request.session)
+    supported_services = tmdb.get_supported_vod_services()
+
+    active_ids = watched_ids if tab == "watched" else watchlist_ids
 
     parsed_ids = []
-    for mid in watchlist_ids:
+    for mid in active_ids:
         try:
             parsed_ids.append(int(mid))
         except (ValueError, TypeError):
@@ -281,6 +303,8 @@ def watchlist(request):
                     "backdrop_url": tmdb_info.get("backdrop_url"),
                     "vote_average": tmdb_info.get("vote_average", 0.0),
                     "overview": tmdb_info.get("overview", ""),
+                    "vod_providers": tmdb_info.get("vod_providers", []),
+                    "justwatch_url": tmdb_info.get("justwatch_url"),
                 }
             return mid, None
 
@@ -289,19 +313,124 @@ def watchlist(request):
                 if m:
                     resolved_movies[mid] = m
 
-    # 3. Assemble in original order
-    movies = []
+    # 3. Enrich local movies with TMDB VOD providers if not already present
+    need_vod_enrichment = [mid for mid in parsed_ids if mid in resolved_movies and "vod_providers" not in resolved_movies[mid]]
+    if need_vod_enrichment:
+        def _fetch_vod(mid: int):
+            t_info = tmdb.fetch_movie_details(mid, lang=lang)
+            return mid, (t_info.get("vod_providers", []) if t_info else []), (t_info.get("justwatch_url") if t_info else None)
+
+        with ThreadPoolExecutor(max_workers=min(len(need_vod_enrichment), 8)) as executor:
+            for mid, vod_list, jw_url in executor.map(_fetch_vod, need_vod_enrichment):
+                if mid in resolved_movies:
+                    resolved_movies[mid]["vod_providers"] = vod_list
+                    resolved_movies[mid]["justwatch_url"] = jw_url
+
+    # 4. Assemble movies in original order
+    all_movies = []
     for mid_int in parsed_ids:
         m = resolved_movies.get(mid_int)
         if m:
             prepare_movie_item(m)
             m["user_rating"] = ratings.get(m["movie_id"], 0)
-            movies.append(m)
+            m["is_watched"] = mid_int in watched_ids
+            m["is_in_watchlist"] = mid_int in watchlist_ids
+            all_movies.append(m)
 
-    ctx.update({
-        "movies": movies,
-    })
+    # 5. Calculate counts per service
+    my_vod_count = sum(
+        1 for m in all_movies
+        if any(p.get("id") in my_subscriptions for p in m.get("vod_providers", []))
+    )
+
+    for s in supported_services:
+        s["movie_count"] = sum(
+            1 for m in all_movies
+            if any(p.get("id") == s["id"] for p in m.get("vod_providers", []))
+        )
+        s["is_subscribed"] = s["id"] in my_subscriptions
+
+    # 6. Apply VOD filter
+    if vod_filter == "my_vod":
+        filtered_movies = [
+            m for m in all_movies
+            if any(p.get("id") in my_subscriptions for p in m.get("vod_providers", []))
+        ]
+    elif vod_filter.isdigit():
+        target_provider = int(vod_filter)
+        filtered_movies = [
+            m for m in all_movies
+            if any(p.get("id") == target_provider for p in m.get("vod_providers", []))
+        ]
+    else:
+        filtered_movies = all_movies
+
+    return {
+        "movies": filtered_movies,
+        "all_movies_count": len(all_movies),
+        "tab": tab,
+        "vod_filter": vod_filter,
+        "my_subscriptions": my_subscriptions,
+        "my_subscriptions_count": len(my_subscriptions),
+        "supported_services": supported_services,
+        "my_vod_count": my_vod_count,
+        "watchlist_count": len(watchlist_ids),
+        "watched_count": len(watched_ids),
+    }
+
+
+def watchlist(request):
+    ctx = get_base_context(request)
+    w_data = get_watchlist_data(request)
+    ctx.update(w_data)
     return render(request, "movies/watchlist.html", ctx)
+
+
+def watchlist_grid_partial(request):
+    ctx = get_base_context(request)
+    w_data = get_watchlist_data(request)
+    ctx.update(w_data)
+    return render(request, "movies/partials/watchlist_grid.html", ctx)
+
+
+def vod_subscription_modal_partial(request):
+    ctx = get_base_context(request)
+    my_subs = profiles.get_active_vod_subscriptions(request.session)
+    services_list = tmdb.get_supported_vod_services()
+    for s in services_list:
+        s["is_subscribed"] = s["id"] in my_subs
+    ctx.update({
+        "supported_services": services_list,
+        "my_subscriptions": my_subs,
+    })
+    return render(request, "movies/partials/vod_subscriptions_modal.html", ctx)
+
+
+@require_POST
+def set_vod_subscriptions_view(request):
+    raw_services = request.POST.getlist("services")
+    provider_ids = []
+    for s in raw_services:
+        try:
+            provider_ids.append(int(s))
+        except (ValueError, TypeError):
+            continue
+
+    saved = profiles.set_vod_subscriptions(request.session, provider_ids)
+    request.session.modified = True
+
+    if request.headers.get("HX-Request"):
+        ctx = get_base_context(request)
+        w_data = get_watchlist_data(request)
+        ctx.update(w_data)
+        response = render(request, "movies/partials/watchlist_grid.html", ctx)
+        response["HX-Trigger"] = json.dumps({
+            "showToast": {"title": "Zaktualizowano Twoje serwisy VOD", "type": "success"},
+            "closeVodModal": True
+        })
+        return response
+
+    return redirect("watchlist")
 
 
 @require_POST
@@ -311,7 +440,33 @@ def toggle_watchlist(request, movie_id):
     lang = i18n.get_lang(request.session)
     msg = "Dodano do Twojej biblioteki" if added else "Usunięto z biblioteki"
     response = JsonResponse({"added": added, "count": count})
-    response["HX-Trigger"] = json.dumps({"showToast": {"title": msg, "type": "success" if added else "info"}})
+    response["HX-Trigger"] = json.dumps({
+        "showToast": {"title": msg, "type": "success" if added else "info"},
+        "watchlistChanged": {"movieId": int(movie_id), "added": added, "count": count}
+    })
+    return response
+
+
+@require_POST
+def toggle_watched(request, movie_id):
+    marked, count = profiles.toggle_watched_item(request.session, movie_id)
+    request.session.modified = True
+    watchlist_count = len(profiles.get_active_watchlist(request.session))
+    toast_msg = "Oznaczono jako obejrzane" if marked else "Usunięto z obejrzanych"
+    response = JsonResponse({
+        "marked": marked,
+        "watched_count": count,
+        "watchlist_count": watchlist_count
+    })
+    response["HX-Trigger"] = json.dumps({
+        "showToast": {"title": toast_msg, "type": "success" if marked else "info"},
+        "watchedChanged": {
+            "movieId": int(movie_id),
+            "marked": marked,
+            "watchedCount": count,
+            "watchlistCount": watchlist_count
+        }
+    })
     return response
 
 
