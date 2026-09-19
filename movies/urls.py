@@ -9,6 +9,7 @@ urlpatterns = [
     path('search/', views.search_live_partial, name='search_live_partial'),
     path('movie/<int:movie_id>/', views.movie_modal_partial, name='movie_modal_partial'),
     path('roulette/', views.roulette, name='roulette'),
+    path('roulette/spin/', views.roulette_spin_partial, name='roulette_spin_partial'),
     path('watchlist/', views.watchlist, name='watchlist'),
     path('watchlist/grid-partial/', views.watchlist_grid_partial, name='watchlist_grid_partial'),
     path('watchlist/toggle/<int:movie_id>/', views.toggle_watchlist, name='toggle_watchlist'),

@@ -1,0 +1,187 @@
+{% load i18n_tags %}
+<div id="roulette-result-container" class="space-y-6">
+    {% if movie %}
+    <!-- Data payload for spinning slot reel animation -->
+    <div id="teaser-data" class="hidden" 
+         data-winner-title="{{ movie.title|escapejs }}"
+         data-winner-poster="{{ movie.poster_url|escapejs }}"
+         data-teasers='[{% for t in teaser_pool %}{"title": "{{ t.title|escapejs }}", "poster": "{{ t.poster_url|escapejs }}"}{% if not forloop.last %},{% endif %}{% endfor %}]'>
+    </div>
+
+    <!-- Winning Card -->
+    <div id="winner-card" class="glass-panel rounded-3xl p-6 md:p-8 max-w-2xl mx-auto border border-amber-500/40 shadow-2xl text-left space-y-6 relative overflow-hidden bg-gradient-to-br from-gray-950 via-gray-900/90 to-purple-950/40 animate-fade-in">
+        <!-- Ambient Glowing Backdrop -->
+        {% if movie.backdrop_url %}
+        <div class="absolute inset-0 opacity-15 pointer-events-none overflow-hidden">
+            <img src="{{ movie.backdrop_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover blur-md scale-110">
+            <div class="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent"></div>
+        </div>
+        {% endif %}
+
+        <div class="relative z-10 flex flex-col sm:flex-row gap-6 items-start">
+            <!-- Poster -->
+            <div class="aspect-[2/3] w-36 sm:w-44 rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/20 bg-gray-900 relative group cursor-pointer"
+                 hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
+                 hx-target="#movie-modal-container"
+                 hx-push-url="/movie/{{ movie.movie_id }}/">
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div class="w-10 h-10 rounded-full bg-brand-gold text-black flex items-center justify-center shadow-lg">
+                        <i data-lucide="play" class="w-4 h-4 fill-black translate-x-0.5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Details -->
+            <div class="space-y-3 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 text-black font-black text-[11px] px-3 py-0.5 rounded-full uppercase tracking-wider shadow-md">
+                        🎉 {{ "hit_of_the_day"|t:current_lang }}
+                    </span>
+                    {% if movie.runtime_display %}
+                    <span class="text-xs font-bold text-gray-300 bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10 flex items-center gap-1">
+                        <i data-lucide="clock" class="w-3 h-3 text-amber-400"></i> {{ movie.runtime_display }}
+                    </span>
+                    {% endif %}
+                </div>
+
+                <h2 class="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
+                    {{ movie.title }}
+                </h2>
+
+                <div class="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                    <span class="text-brand-gold font-extrabold flex items-center gap-1 bg-brand-gold/10 px-2 py-0.5 rounded-md border border-brand-gold/20">
+                        <i data-lucide="star" class="w-3.5 h-3.5 fill-brand-gold"></i> {{ movie.vote_average }}
+                    </span>
+                    {% if movie.year %}
+                    <span class="font-bold">{{ movie.year }}</span>
+                    {% endif %}
+                    {% if movie.genres_list %}
+                    <span class="text-gray-400">• {{ movie.genres_list|slice:":3"|join:", " }}</span>
+                    {% endif %}
+                </div>
+
+                {% if movie.tagline %}
+                <p class="text-xs text-brand-gold italic">"{{ movie.tagline }}"</p>
+                {% endif %}
+
+                <p class="text-xs sm:text-sm text-gray-300 line-clamp-4 leading-relaxed">
+                    {{ movie.overview|default:"" }}
+                </p>
+
+                <!-- VOD Streaming Providers on Card -->
+                {% if movie.vod_providers or movie.search_deeplinks %}
+                <div class="pt-2.5 border-t border-white/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                            {% if movie.vod_providers %}
+                                {{ "vod_providers"|t:current_lang }}
+                            {% else %}
+                                {{ "vod_check_services"|t:current_lang }}
+                            {% endif %}
+                        </span>
+                        {% if movie.justwatch_url %}
+                        <a 
+                            href="{{ movie.justwatch_url }}" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:underline"
+                        >
+                            <span>JustWatch</span>
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        {% if movie.vod_providers %}
+                            {% for prov in movie.vod_providers|slice:":4" %}
+                            <a 
+                                href="{{ prov.direct_url }}" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-semibold transition-all shadow-sm group hover:scale-105"
+                                title="{{ prov.name }}"
+                            >
+                                {% if prov.logo_url %}
+                                <img src="{{ prov.logo_url }}" alt="{{ prov.name }}" class="w-4 h-4 rounded object-cover">
+                                {% endif %}
+                                <span>{{ prov.name }}</span>
+                                <i data-lucide="external-link" class="w-3 h-3 text-gray-400 group-hover:text-white"></i>
+                            </a>
+                            {% endfor %}
+                        {% elif movie.search_deeplinks %}
+                            {% for prov in movie.search_deeplinks|slice:":4" %}
+                            <a 
+                                href="{{ prov.direct_url }}" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-gray-200 hover:text-white text-xs font-semibold transition-all shadow-sm group hover:scale-105"
+                                title="Szukaj na {{ prov.name }}"
+                            >
+                                {% if prov.logo_url %}
+                                <img src="{{ prov.logo_url }}" alt="{{ prov.name }}" class="w-4 h-4 rounded object-cover">
+                                {% endif %}
+                                <span>{{ prov.name }}</span>
+                                <i data-lucide="external-link" class="w-3 h-3 text-gray-400 group-hover:text-amber-400"></i>
+                            </a>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-white/10 relative z-10">
+            <button 
+                type="button"
+                hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
+                hx-target="#movie-modal-container"
+                hx-push-url="/movie/{{ movie.movie_id }}/"
+                class="w-full bg-brand-gold hover:bg-amber-400 text-black font-extrabold py-3 rounded-xl flex items-center justify-center gap-2 text-xs shadow-lg shadow-brand-gold/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+                <i data-lucide="play" class="w-4 h-4 fill-black"></i>
+                <span>{{ "details_and_trailer"|t:current_lang }}</span>
+            </button>
+
+            <button 
+                type="button"
+                onclick="triggerSpin()"
+                class="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                <span>{{ "spin_again"|t:current_lang }}</span>
+            </button>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Results Fallback Card -->
+    <div class="glass-panel rounded-3xl p-8 max-w-md mx-auto text-center space-y-4 border border-white/10 shadow-2xl animate-fade-in">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/20 text-brand-gold flex items-center justify-center border border-amber-500/30">
+            <i data-lucide="sparkles" class="w-7 h-7"></i>
+        </div>
+        <h3 class="text-base font-bold text-white">{{ "no_movies_found"|t:current_lang }}</h3>
+        <p class="text-xs text-gray-400 leading-relaxed">
+            {{ "no_roulette_results"|t:current_lang }}
+        </p>
+        <button 
+            type="button" 
+            onclick="resetRouletteFilters()"
+            class="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all"
+        >
+            Resetuj filtry i zakręć
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+    // Fire confetti when a winner card is rendered
+    if (typeof triggerConfetti === 'function') {
+        triggerConfetti();
+    }
+</script>

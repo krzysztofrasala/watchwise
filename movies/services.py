@@ -1,3 +1,4 @@
+from __future__ import annotations
 import ast
 import os
 import pickle
@@ -247,15 +248,91 @@ def get_all_genres():
     return sorted(list(all_g))
 
 
+MOOD_GENRES = {
+    "fun": ["Comedy", "Animation", "Family"],
+    "thrill": ["Thriller", "Horror", "Mystery"],
+    "action": ["Action", "Adventure"],
+    "romance": ["Romance", "Drama"],
+    "chill": ["Drama", "Documentary", "Music"],
+    "mindfuck": ["Science Fiction", "Mystery"],
+}
+
+
 def get_random_movie(genre: str = None):
+    """Backward compatible helper returning a single random movie."""
+    winner, _ = get_random_movie_pool(genre=genre)
+    return winner
+
+
+def get_random_movie_pool(
+    genre: str = None,
+    mood: str = None,
+    max_runtime: int = None,
+    min_rating: float = None,
+    candidate_ids: list[int] = None,
+    exclude_ids: list[int] = None,
+    pool_size: int = 8,
+) -> tuple[dict | None, list[dict]]:
+    """Return a randomly picked movie along with a teaser pool for spinning animation."""
     movies_df, _ = load_dataset()
-    df = movies_df
+    df = movies_df.copy()
+
+    # 1. Exclude already watched or disliked movies
+    if exclude_ids:
+        try:
+            ex_set = {int(x) for x in exclude_ids}
+            df = df[~df["movie_id"].isin(ex_set)]
+        except Exception:
+            pass
+
+    # 2. Candidate restriction (e.g. from user's watchlist or VOD pool)
+    if candidate_ids is not None:
+        try:
+            cand_set = {int(x) for x in candidate_ids}
+            df = df[df["movie_id"].isin(cand_set)]
+        except Exception:
+            pass
+
+    # 3. Genre filter
     if genre and genre != "All":
         df = df[df["genres_list"].apply(lambda g: isinstance(g, list) and genre in g)]
+
+    # 4. Mood / Vibe filter
+    if mood and mood in MOOD_GENRES:
+        target_genres = MOOD_GENRES[mood]
+        df = df[df["genres_list"].apply(lambda g: isinstance(g, list) and any(t in g for t in target_genres))]
+        if mood == "mindfuck":
+            df = df[df["vote_average"] >= 6.8]
+
+    # 5. Runtime filter
+    if max_runtime:
+        try:
+            rt = int(max_runtime)
+            if rt == 121:  # 120+ minutes / epic
+                df = df[df["runtime"] >= 120]
+            elif rt > 0:
+                df = df[(df["runtime"] > 0) & (df["runtime"] <= rt)]
+        except (ValueError, TypeError):
+            pass
+
+    # 6. Minimum rating
+    if min_rating:
+        try:
+            df = df[df["vote_average"] >= float(min_rating)]
+        except (ValueError, TypeError):
+            pass
+
     if df.empty:
-        return None
-    sample = df.sample(n=1).iloc[0].to_dict()
-    return sample
+        return None, []
+
+    # Pick winner
+    sample_row = df.sample(n=1).iloc[0].to_dict()
+
+    # Pick up to pool_size distinct items for the reel animation
+    pool_n = min(len(df), pool_size)
+    teaser_rows = df.sample(n=pool_n).to_dict(orient="records")
+
+    return sample_row, teaser_rows
 
 
 def get_trending_content(category: str = "movies", lang: str = "PL") -> list[dict]:

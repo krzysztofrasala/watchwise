@@ -138,6 +138,60 @@ def get_provider_direct_url(provider_name: str, provider_id: int, movie_title: s
         return f"https://www.justwatch.com/pl/search?q={title_q}"
 
 
+def get_justwatch_url(title: str, lang: str = "PL") -> str:
+    """Return JustWatch search URL for movie title."""
+    region = "pl" if (lang or "PL").upper() == "PL" else "us"
+    return f"https://www.justwatch.com/{region}/search?q={quote(title or '')}"
+
+
+def get_search_deeplinks(title: str) -> list[dict]:
+    """Provide direct search deeplinks for top streaming providers."""
+    title_q = quote(title or "")
+    return [
+        {
+            "id": 8,
+            "name": "Netflix",
+            "logo_url": "https://image.tmdb.org/t/p/w92/pbpMk2JmcoNnQwx5JGp8jWBDjeW.jpg",
+            "direct_url": f"https://www.netflix.com/search?q={title_q}",
+            "badge_color": "#E50914",
+        },
+        {
+            "id": 1899,
+            "name": "Max",
+            "logo_url": "https://image.tmdb.org/t/p/w92/jse515m3uB8g4t3zS7d0A1b9.jpg",
+            "direct_url": f"https://www.max.com/search?q={title_q}",
+            "badge_color": "#002BE7",
+        },
+        {
+            "id": 337,
+            "name": "Disney+",
+            "logo_url": "https://image.tmdb.org/t/p/w92/97yvRBw1GzX7fT5Y2j7kM8q6Qx.jpg",
+            "direct_url": f"https://www.disneyplus.com/search?q={title_q}",
+            "badge_color": "#113CCF",
+        },
+        {
+            "id": 119,
+            "name": "Prime Video",
+            "logo_url": "https://image.tmdb.org/t/p/w92/p5117uVzD6nF14l4lKkE4o25X8k.jpg",
+            "direct_url": f"https://www.primevideo.com/search?phrase={title_q}",
+            "badge_color": "#00A8E1",
+        },
+        {
+            "id": 350,
+            "name": "Apple TV+",
+            "logo_url": "https://image.tmdb.org/t/p/w92/2E03pXt88mPuvE2M97w6J4lA1.jpg",
+            "direct_url": f"https://tv.apple.com/search?term={title_q}",
+            "badge_color": "#A2AAAD",
+        },
+        {
+            "id": 1773,
+            "name": "SkyShowtime",
+            "logo_url": "https://image.tmdb.org/t/p/w92/77zL1G9g9M9k9J9k.jpg",
+            "direct_url": f"https://www.skyshowtime.com/search?q={title_q}",
+            "badge_color": "#FFC700",
+        },
+    ]
+
 
 @lru_cache(maxsize=300)
 def fetch_movie_details(movie_id: int, lang: str = "PL") -> dict | None:
