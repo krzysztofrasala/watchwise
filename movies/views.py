@@ -7,13 +7,20 @@ from django.views.decorators.http import require_GET, require_POST
 from . import services, tmdb, recommender, taste, nl_query, profiles, i18n
 
 
-def prepare_movie_item(item: dict) -> dict:
+def prepare_movie_item(item: dict, lang: str = "PL") -> dict:
     item["poster_url"] = tmdb.get_poster_url(item.get("poster_path") or item.get("poster_url"))
     item["backdrop_url"] = tmdb.get_backdrop_url(item.get("backdrop_path") or item.get("backdrop_url"))
     try:
         item["vote_average"] = round(float(item.get("vote_average") or 0.0), 1)
     except (ValueError, TypeError):
         item["vote_average"] = 0.0
+
+    title = item.get("title") or item.get("name") or ""
+    if title:
+        if not item.get("justwatch_url"):
+            item["justwatch_url"] = tmdb.get_justwatch_url(title, lang=lang)
+        if not item.get("search_deeplinks"):
+            item["search_deeplinks"] = tmdb.get_search_deeplinks(title)
     return item
 
 
@@ -45,11 +52,9 @@ def get_base_context(request) -> dict:
 def index(request):
     ctx = get_base_context(request)
     lang = ctx["current_lang"]
-
+    ratings = profiles.get_active_ratings(request.session)
     watchlist_ids = profiles.get_active_watchlist(request.session)
     watched_ids = profiles.get_active_watched(request.session)
-    ratings = profiles.get_active_ratings(request.session)
-
     genres = services.get_all_genres()
     filtered = services.filter_movies(genre="All", sort_by="vote_desc", per_page=24)
 
@@ -189,7 +194,7 @@ def movie_modal_partial(request, movie_id):
             "year": None,
         }
 
-    prepare_movie_item(movie)
+    prepare_movie_item(movie, lang=lang)
     tmdb_info = tmdb.fetch_movie_details(movie_id, lang=lang)
     if tmdb_info:
         for k, v in tmdb_info.items():
@@ -199,9 +204,14 @@ def movie_modal_partial(request, movie_id):
     if not movie.get("title"):
         return HttpResponse("Film lub serial nie został znaleziony.", status=404)
 
+    if not movie.get("justwatch_url") and movie.get("title"):
+        movie["justwatch_url"] = tmdb.get_justwatch_url(movie["title"], lang=lang)
+    if not movie.get("search_deeplinks") and movie.get("title"):
+        movie["search_deeplinks"] = tmdb.get_search_deeplinks(movie["title"])
+
     recommendations = services.get_recommendations(movie_id, top_n=8)
     for rec in recommendations:
-        prepare_movie_item(rec)
+        prepare_movie_item(rec, lang=lang)
 
     watchlist_ids = profiles.get_active_watchlist(request.session)
     watched_ids = profiles.get_active_watched(request.session)
@@ -229,29 +239,158 @@ def movie_modal_partial(request, movie_id):
     return render(request, "movies/movie_detail.html", ctx)
 
 
+ROULETTE_MOODS = [
+    {"id": "all", "label_key": "vibe_all", "desc_key": "vibe_all_desc", "icon": "sparkles"},
+    {"id": "fun", "label_key": "vibe_fun", "desc_key": "vibe_fun_desc", "icon": "smile"},
+    {"id": "thrill", "label_key": "vibe_thrill", "desc_key": "vibe_thrill_desc", "icon": "zap"},
+    {"id": "action", "label_key": "vibe_action", "desc_key": "vibe_action_desc", "icon": "flame"},
+    {"id": "mindfuck", "label_key": "vibe_mindfuck", "desc_key": "vibe_mindfuck_desc", "icon": "brain"},
+    {"id": "romance", "label_key": "vibe_romance", "desc_key": "vibe_romance_desc", "icon": "heart"},
+    {"id": "chill", "label_key": "vibe_chill", "desc_key": "vibe_chill_desc", "icon": "coffee"},
+]
+
+ROULETTE_RUNTIMES = [
+    {"val": "0", "label_key": "runtime_any"},
+    {"val": "90", "label_key": "runtime_short"},
+    {"val": "105", "label_key": "runtime_medium"},
+    {"val": "120", "label_key": "runtime_standard"},
+    {"val": "121", "label_key": "runtime_epic"},
+]
+
+ROULETTE_SOURCES = [
+    {"val": "all", "label_key": "source_all", "icon": "globe"},
+    {"val": "watchlist", "label_key": "source_watchlist", "icon": "bookmark"},
+    {"val": "my_vod", "label_key": "source_my_vod", "icon": "tv"},
+]
+
+
 def roulette(request):
     ctx = get_base_context(request)
     lang = ctx["current_lang"]
     genre = request.GET.get("genre", "All")
     genres = services.get_all_genres()
-    selected_movie = None
+    mood = request.GET.get("mood", "all")
+    runtime = request.GET.get("runtime", "0")
+    source = request.GET.get("source", "all")
+    exclude_watched = request.GET.get("exclude_watched", "1") in ["1", "true", "True"]
 
-    if request.GET.get("spin") == "true":
-        selected_movie = services.get_random_movie(genre=genre)
-        if selected_movie:
-            prepare_movie_item(selected_movie)
-            tmdb_info = tmdb.fetch_movie_details(selected_movie["movie_id"], lang=lang)
-            if tmdb_info:
-                for k, v in tmdb_info.items():
-                    if v:
-                        selected_movie[k] = v
+    my_subs = profiles.get_active_vod_subscriptions(request.session)
+    supported_services = tmdb.get_supported_vod_services()
+    for s in supported_services:
+        s["is_subscribed"] = s["id"] in my_subs
 
     ctx.update({
         "genres": genres,
         "selected_genre": genre,
-        "movie": selected_movie,
+        "selected_mood": mood,
+        "selected_runtime": runtime,
+        "selected_source": source,
+        "exclude_watched": exclude_watched,
+        "moods": ROULETTE_MOODS,
+        "runtimes": ROULETTE_RUNTIMES,
+        "sources": ROULETTE_SOURCES,
+        "my_subscriptions": my_subs,
+        "supported_services": supported_services,
     })
     return render(request, "movies/roulette.html", ctx)
+
+
+def roulette_spin_partial(request):
+    ctx = get_base_context(request)
+    lang = ctx["current_lang"]
+
+    genre = request.GET.get("genre", "All").strip()
+    mood = request.GET.get("mood", "all").strip()
+    max_runtime = request.GET.get("runtime", "0").strip()
+    min_rating = request.GET.get("rating", "0").strip()
+    source = request.GET.get("source", "all").strip()
+    exclude_watched = request.GET.get("exclude_watched", "1") in ["1", "true", "True"]
+
+    watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
+    my_subs = profiles.get_active_vod_subscriptions(request.session)
+    ratings = profiles.get_active_ratings(request.session)
+
+    exclude_ids = list(watched_ids) if exclude_watched else []
+
+    candidate_ids = None
+    if source == "watchlist":
+        candidate_ids = list(watchlist_ids)
+    elif source == "my_vod":
+        # First gather candidates from watchlist matching subscriptions
+        vod_cands = []
+        for mid in watchlist_ids:
+            t_info = tmdb.fetch_movie_details(mid, lang=lang)
+            if t_info and any(p.get("id") in my_subs for p in t_info.get("vod_providers", [])):
+                vod_cands.append(mid)
+        # If pool is small, supplement from trending titles available on user's VOD
+        if len(vod_cands) < 8:
+            trending = services.get_trending_content(category="movies", lang=lang)
+            for item in trending:
+                mid = item.get("movie_id")
+                if mid:
+                    t_info = tmdb.fetch_movie_details(mid, lang=lang)
+                    if t_info and any(p.get("id") in my_subs for p in t_info.get("vod_providers", [])):
+                        vod_cands.append(mid)
+        candidate_ids = list(set(vod_cands))
+
+    winner, teaser_pool = services.get_random_movie_pool(
+        genre=genre if genre != "All" else None,
+        mood=mood if mood != "all" else None,
+        max_runtime=int(max_runtime) if max_runtime.isdigit() and int(max_runtime) > 0 else None,
+        min_rating=float(min_rating) if min_rating and float(min_rating) > 0 else None,
+        candidate_ids=candidate_ids,
+        exclude_ids=exclude_ids,
+        pool_size=10,
+    )
+
+    if winner:
+        prepare_movie_item(winner)
+        tmdb_info = tmdb.fetch_movie_details(winner["movie_id"], lang=lang)
+        if tmdb_info:
+            for k, v in tmdb_info.items():
+                if v:
+                    winner[k] = v
+        winner["is_watched"] = winner["movie_id"] in watched_ids
+        winner["is_in_watchlist"] = winner["movie_id"] in watchlist_ids
+        winner["user_rating"] = ratings.get(winner["movie_id"], 0)
+
+        if not winner.get("justwatch_url") and winner.get("title"):
+            winner["justwatch_url"] = tmdb.get_justwatch_url(winner["title"], lang=lang)
+        if not winner.get("search_deeplinks") and winner.get("title"):
+            winner["search_deeplinks"] = tmdb.get_search_deeplinks(winner["title"])
+
+        # Format runtime display string e.g. "1h 45m"
+        rt = winner.get("runtime") or 0
+        try:
+            rt_int = int(rt)
+            if rt_int > 0:
+                hours = rt_int // 60
+                mins = rt_int % 60
+                winner["runtime_display"] = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+        except (ValueError, TypeError):
+            pass
+
+    # Ensure winner is part of reel
+    prepared_teasers = []
+    for item in teaser_pool:
+        prepare_movie_item(item)
+        prepared_teasers.append(item)
+
+    if winner and not any(t.get("movie_id") == winner["movie_id"] for t in prepared_teasers):
+        prepared_teasers.insert(0, winner)
+
+    ctx.update({
+        "movie": winner,
+        "teaser_pool": prepared_teasers,
+        "selected_genre": genre,
+        "selected_mood": mood,
+        "selected_runtime": max_runtime,
+        "selected_source": source,
+        "exclude_watched": exclude_watched,
+        "my_subscriptions": my_subs,
+    })
+    return render(request, "movies/partials/roulette_result.html", ctx)
 
 
 def get_watchlist_data(request) -> dict:
