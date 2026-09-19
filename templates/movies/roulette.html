@@ -4,77 +4,159 @@
 {% block title %}{{ "roulette_title"|t:current_lang }} — Watch Wise 2.0{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-8 text-center py-6 relative">
+<div class="max-w-4xl mx-auto space-y-8 text-center py-6 relative">
 
-    <!-- Canvas Confetti Overlay -->
+    <!-- Confetti FX Canvas -->
     <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
 
-    <div class="space-y-2">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-bold uppercase tracking-wider">
+    <!-- Header -->
+    <div class="space-y-3">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-black uppercase tracking-wider shadow-sm">
             <i data-lucide="dices" class="w-4 h-4"></i> {{ "what_are_we_watching"|t:current_lang }}
         </div>
         <h1 class="text-3xl md:text-5xl font-black text-white tracking-tight">
-            {{ "roulette_title"|t:current_lang }}
+            {{ "roulette_title"|t:current_lang }} 2.0
         </h1>
-        <p class="text-sm text-gray-400">
-            {{ "roulette_desc"|t:current_lang }}
+        <p class="text-xs md:text-sm text-gray-400 max-w-lg mx-auto leading-relaxed">
+            Nie wiesz co wybrać na wieczorny seans? Ustaw nastrój, czas i platformy VOD, a silnik WatchWise wytypuje idealny tytuł!
         </p>
     </div>
 
-    <!-- Spin Controls -->
-    <form method="GET" action="{% url 'roulette' %}" id="roulette-form" class="glass-panel p-6 rounded-3xl space-y-5 max-w-md mx-auto shadow-2xl border border-white/10">
-        <input type="hidden" name="spin" value="true">
-        
-        <div class="space-y-2 text-left">
-            <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">{{ "select_genre"|t:current_lang }}</label>
-            <select name="genre" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-gold font-semibold">
-                <option value="All" {% if selected_genre == "All" %}selected{% endif %}>{{ "all_genres"|t:current_lang }}</option>
-                {% for g in genres %}
-                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
+    <!-- Control Panel -->
+    <form 
+        id="roulette-form"
+        hx-get="{% url 'roulette_spin_partial' %}"
+        hx-target="#roulette-result-container"
+        hx-swap="innerHTML"
+        hx-indicator="#spin-loader"
+        onsubmit="handleSpinStart(event)"
+        class="glass-panel p-6 md:p-8 rounded-3xl space-y-6 max-w-2xl mx-auto shadow-2xl border border-white/10 text-left relative overflow-hidden"
+    >
+        <!-- Background Ambient Glow -->
+        <div class="absolute -top-24 -right-24 w-48 h-48 bg-purple-600/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- 1. Source Selector (Tabs) -->
+        <div class="space-y-2 relative z-10">
+            <label class="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="folder-search" class="w-3.5 h-3.5 text-brand-gold"></i> {{ "source_label"|t:current_lang }}
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {% for s in sources %}
+                <label class="cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none
+                    {% if selected_source == s.val %}
+                    bg-brand-gold/15 border-brand-gold/50 text-white shadow-md
+                    {% else %}
+                    bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white
+                    {% endif %}"
+                    onclick="updateSourceActive(this)"
+                >
+                    <input type="radio" name="source" value="{{ s.val }}" class="sr-only" {% if selected_source == s.val %}checked{% endif %}>
+                    <i data-lucide="{{ s.icon }}" class="w-4 h-4 text-brand-gold shrink-0"></i>
+                    <span class="truncate">{{ s.label_key|t:current_lang }}</span>
+                </label>
                 {% endfor %}
-            </select>
+            </div>
         </div>
 
-        <button type="submit" id="spin-btn" class="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-purple-600/30 flex items-center justify-center gap-2 text-base transition-all hover:scale-105 active:scale-95">
-            <i data-lucide="dices" class="w-5 h-5"></i> {{ "spin_roulette"|t:current_lang }}
-        </button>
-    </form>
-
-    <!-- Spin Result Card -->
-    {% if movie %}
-    <div id="result-card" class="pt-6 animate-fade-in">
-        <div class="glass-panel rounded-3xl p-6 md:p-8 max-w-lg mx-auto border border-amber-500/40 shadow-2xl text-left space-y-4 relative overflow-hidden bg-gradient-to-br from-gray-900/90 to-purple-950/40">
-            <div class="flex gap-6 items-center">
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-32 h-48 object-cover rounded-2xl shadow-2xl shrink-0 border border-white/20">
-                <div class="space-y-2 flex-1">
-                    <span class="bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase shadow-md">
-                        🎉 {{ "hit_of_the_day"|t:current_lang }}
-                    </span>
-                    <h2 class="text-xl md:text-2xl font-black text-white leading-tight">
-                        {{ movie.title }}
-                    </h2>
-                    <div class="flex items-center gap-3 text-xs text-gray-400">
-                        <span class="text-brand-gold font-extrabold flex items-center gap-1 bg-brand-gold/10 px-2 py-0.5 rounded-md border border-brand-gold/20">
-                            <i data-lucide="star" class="w-3.5 h-3.5 fill-brand-gold"></i> {{ movie.vote_average }}
-                        </span>
-                        <span class="font-bold">{{ movie.year }}</span>
+        <!-- 2. Mood / Vibe Picker (Pills) -->
+        <div class="space-y-2 relative z-10">
+            <label class="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-400"></i> {{ "roulette_vibe_label"|t:current_lang }}
+            </label>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {% for m in moods %}
+                <label class="cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all select-none
+                    {% if selected_mood == m.id %}
+                    bg-purple-600/20 border-purple-500/50 text-white shadow-md shadow-purple-600/10
+                    {% else %}
+                    bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white
+                    {% endif %}"
+                    onclick="updateMoodActive(this)"
+                >
+                    <input type="radio" name="mood" value="{{ m.id }}" class="sr-only" {% if selected_mood == m.id %}checked{% endif %}>
+                    <div class="flex items-center gap-1.5 text-xs font-black">
+                        <i data-lucide="{{ m.icon }}" class="w-3.5 h-3.5 text-purple-400"></i>
+                        <span class="truncate">{{ m.label_key|t:current_lang }}</span>
                     </div>
-                    <p class="text-xs text-gray-300 line-clamp-3 leading-relaxed">
-                        {{ movie.overview|default:"" }}
-                    </p>
-                </div>
+                    <span class="text-[10px] text-gray-400 mt-0.5 truncate">{{ m.desc_key|t:current_lang }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 3. Runtime & Genre Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+            <!-- Runtime -->
+            <div class="space-y-1.5">
+                <label class="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-blue-400"></i> {{ "runtime_label"|t:current_lang }}
+                </label>
+                <select name="runtime" class="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-gold font-semibold">
+                    {% for r in runtimes %}
+                    <option value="{{ r.val }}" {% if selected_runtime == r.val %}selected{% endif %}>{{ r.label_key|t:current_lang }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
+            <!-- Genre -->
+            <div class="space-y-1.5">
+                <label class="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="film" class="w-3.5 h-3.5 text-emerald-400"></i> {{ "movie_genre"|t:current_lang }}
+                </label>
+                <select name="genre" class="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-gold font-semibold">
+                    <option value="All" {% if selected_genre == "All" %}selected{% endif %}>{{ "all_genres"|t:current_lang }}</option>
+                    {% for g in genres %}
+                    <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- 4. Exclude Watched Checkbox -->
+        <div class="flex items-center gap-2.5 pt-1 relative z-10">
+            <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+                <input 
+                    type="checkbox" 
+                    name="exclude_watched" 
+                    value="1" 
+                    class="w-4 h-4 rounded border-white/20 bg-white/5 text-brand-gold focus:ring-0 focus:outline-none cursor-pointer"
+                    {% if exclude_watched %}checked{% endif %}
+                >
+                <span class="text-xs text-gray-300 font-medium">
+                    {{ "exclude_watched_label"|t:current_lang }}
+                </span>
+            </label>
+        </div>
+
+        <!-- 5. Spin Button -->
+        <div class="pt-2 relative z-10">
             <button 
-                hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
-                hx-target="#movie-modal-container"
-                class="w-full bg-brand-gold hover:bg-brand-goldHover text-black font-extrabold py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm shadow-xl shadow-brand-gold/20 transition-all hover:scale-[1.02]"
+                type="submit" 
+                id="spin-btn" 
+                class="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black py-4 px-6 rounded-2xl shadow-2xl shadow-purple-600/30 flex items-center justify-center gap-2.5 text-base transition-all hover:scale-[1.02] active:scale-[0.98] group"
             >
-                <i data-lucide="play" class="w-4 h-4 fill-black"></i> {{ "details_and_trailer"|t:current_lang }}
+                <i data-lucide="dices" class="w-5 h-5 group-hover:rotate-180 transition-transform duration-500"></i>
+                <span id="spin-btn-text">{{ "spin_roulette"|t:current_lang }}</span>
             </button>
         </div>
+    </form>
+
+    <!-- Visual Spinning Reel Loader (Slot Machine FX) -->
+    <div id="spin-loader" class="htmx-indicator space-y-4 py-8 max-w-md mx-auto">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-purple-600 to-amber-500 animate-spin flex items-center justify-center shadow-xl">
+            <i data-lucide="dices" class="w-8 h-8 text-white"></i>
+        </div>
+        <p class="text-sm font-extrabold text-white animate-pulse tracking-wide">
+            {{ "spinning_roulette"|t:current_lang }}
+        </p>
     </div>
-    {% endif %}
+
+    <!-- Spin Result Container -->
+    <div id="roulette-result-container" class="pt-2"></div>
+
+    <!-- Container for Movie Detail Modal -->
+    <div id="movie-modal-container"></div>
 </div>
 
 <script>
@@ -89,56 +171,95 @@
         const particles = [];
         const colors = ['#F5C518', '#ec4899', '#a855f7', '#10b981', '#3b82f6'];
 
-        for (let i = 0; i < 80; i++) {
+        for (let i = 0; i < 90; i++) {
             particles.push({
                 x: canvas.width / 2,
-                y: canvas.height / 2 - 100,
-                vx: (Math.random() - 0.5) * 12,
-                vy: (Math.random() - 0.7) * 14,
+                y: canvas.height / 2 - 80,
+                vx: (Math.random() - 0.5) * 16,
+                vy: (Math.random() - 0.7) * 18,
                 size: Math.random() * 8 + 4,
                 color: colors[Math.floor(Math.random() * colors.length)],
                 rotation: Math.random() * 360,
-                rspeed: (Math.random() - 0.5) * 10,
-                opacity: 1
+                rSpeed: (Math.random() - 0.5) * 10
             });
         }
 
         let animationFrame;
+        let opacity = 1.0;
+
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            let alive = false;
+            let active = false;
 
             particles.forEach(p => {
                 p.x += p.vx;
                 p.y += p.vy;
-                p.vy += 0.3; // gravity
-                p.rotation += p.rspeed;
-                p.opacity -= 0.015;
+                p.vy += 0.45; // gravity
+                p.vx *= 0.98; // friction
+                p.rotation += p.rSpeed;
 
-                if (p.opacity > 0) {
-                    alive = true;
-                    ctx.save();
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate((p.rotation * Math.PI) / 180);
-                    ctx.globalAlpha = Math.max(0, p.opacity);
-                    ctx.fillStyle = p.color;
-                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-                    ctx.restore();
-                }
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation * Math.PI / 180);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = opacity;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+                ctx.restore();
+
+                if (p.y < canvas.height + 50) active = true;
             });
 
-            if (alive) {
+            opacity -= 0.012;
+            if (active && opacity > 0) {
                 animationFrame = requestAnimationFrame(render);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
         }
-
         render();
     }
 
-    {% if movie %}
-    document.addEventListener('DOMContentLoaded', function() {
-        triggerConfetti();
-    });
-    {% endif %}
+    function handleSpinStart(e) {
+        const resultContainer = document.getElementById('roulette-result-container');
+        if (resultContainer) {
+            resultContainer.innerHTML = '';
+        }
+    }
+
+    function triggerSpin() {
+        const form = document.getElementById('roulette-form');
+        if (form) {
+            htmx.trigger(form, 'submit');
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function resetRouletteFilters() {
+        const form = document.getElementById('roulette-form');
+        if (form) {
+            form.reset();
+            const allMood = form.querySelector('input[name="mood"][value="all"]');
+            if (allMood) allMood.click();
+            const allSource = form.querySelector('input[name="source"][value="all"]');
+            if (allSource) allSource.click();
+            triggerSpin();
+        }
+    }
+
+    function updateSourceActive(label) {
+        const labels = label.parentElement.querySelectorAll('label');
+        labels.forEach(l => {
+            l.className = 'cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white';
+        });
+        label.className = 'cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-brand-gold/15 border-brand-gold/50 text-white shadow-md';
+    }
+
+    function updateMoodActive(label) {
+        const labels = label.parentElement.querySelectorAll('label');
+        labels.forEach(l => {
+            l.className = 'cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all select-none bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white';
+        });
+        label.className = 'cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all select-none bg-purple-600/20 border-purple-500/50 text-white shadow-md shadow-purple-600/10';
+    }
 </script>
 {% endblock %}

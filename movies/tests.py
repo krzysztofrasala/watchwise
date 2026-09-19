@@ -216,5 +216,27 @@ class MoviesViewTestCase(TestCase):
         self.assertEqual(profiles.get_active_watched(session), [19995])
         self.assertEqual(profiles.get_active_vod_subscriptions(session), [8, 337])
 
+    def test_roulette_spin_partial_and_filters(self):
+        # 1. Base spin with default params
+        res = self.client.get(reverse('roulette_spin_partial'))
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'id="roulette-result-container"')
+
+        # 2. Spin with mood and runtime
+        res_filtered = self.client.get(reverse('roulette_spin_partial') + '?mood=fun&runtime=120')
+        self.assertEqual(res_filtered.status_code, 200)
+
+        # 3. Spin with watchlist source
+        self.client.post(reverse('toggle_watchlist', args=[19995]))
+        res_wl = self.client.get(reverse('roulette_spin_partial') + '?source=watchlist')
+        self.assertEqual(res_wl.status_code, 200)
+        self.assertContains(res_wl, 'Avatar')
+
+        # 4. Spin with excluded watched
+        self.client.post(reverse('toggle_watched', args=[19995]))
+        res_ex = self.client.get(reverse('roulette_spin_partial') + '?source=watchlist&exclude_watched=1')
+        self.assertEqual(res_ex.status_code, 200)
+
+
 
 
