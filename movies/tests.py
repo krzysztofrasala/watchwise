@@ -345,6 +345,19 @@ class MoviesViewTestCase(TestCase):
         self.assertContains(res, "Z Twojej Watchlisty")
         self.assertContains(res, "W abonamencie")
 
+    def test_roulette_my_vod_subscription_filter(self):
+        self.client.post(reverse('switch_language'), {'lang': 'PL'})
+        # Subscribe to Player (id: 505)
+        self.client.post(reverse('set_vod_subscriptions'), {'services': ['505']})
+
+        # Spin with the exact parameters from user's case
+        res = self.client.get(
+            reverse('roulette_spin_partial') +
+            '?source=my_vod&target_vod=any&only_subs=1&mood=all&runtime=any&genre=all&exclude_watched=1'
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'id="roulette-result-container"')
+
     def test_roulette_empty_vod_prompt(self):
         self.client.post(reverse('switch_language'), {'lang': 'PL'})
         # Clear subscriptions

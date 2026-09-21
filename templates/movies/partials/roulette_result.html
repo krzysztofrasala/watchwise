@@ -210,4 +210,9 @@
     if (typeof triggerConfetti === 'function') {
         triggerConfetti();
     }
+    // Smoothly scroll down so the user immediately sees the winning card
+    const winnerCard = document.getElementById('winner-card') || document.getElementById('roulette-result-container');
+    if (winnerCard) {
+        winnerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 </script>
