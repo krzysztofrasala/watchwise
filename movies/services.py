@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from django.core.cache import cache
-from . import tmdb
+from . import tmdb, i18n
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
@@ -17,6 +17,26 @@ MOVIE_DICT_FILE = DATA_DIR / 'movie_dict.pkl'
 NEIGHBORS_FILE = DATA_DIR / 'neighbors.pkl'
 MOVIES_CSV_FILE = DATA_DIR / 'movies.csv'
 VECTORS_FILE = DATA_DIR / 'vectors.npz'
+
+
+import re
+
+def clean_overview_from_tags(tags: str) -> str:
+    """Extract clean, capitalized English overview from tags string."""
+    if not tags or not isinstance(tags, str):
+        return ""
+    m = re.search(r'^(.*?[.!?…])\s+(?:[a-z0-9]+(?:\s+[a-z0-9]+)*)$', tags)
+    if m:
+        text = m.group(1).strip()
+    else:
+        last_punct = max(tags.rfind('.'), tags.rfind('!'), tags.rfind('?'))
+        if last_punct > 20:
+            text = tags[:last_punct + 1].strip()
+        else:
+            text = tags.strip()
+    sentences = re.split(r'([.!?…]\s+)', text)
+    capitalized = "".join(part if re.match(r'^[.!?…]\s+$', part) else part.capitalize() for part in sentences)
+    return capitalized
 
 
 def parse_genres(genres_str) -> list[str]:
@@ -56,6 +76,12 @@ def load_dataset():
             merged[col] = ""
         else:
             merged[col] = merged[col].fillna("")
+
+    # Multilingual overview & title fallbacks
+    merged["overview_pl"] = merged["overview"]
+    merged["overview_en"] = [clean_overview_from_tags(t) for t in merged.get("tags", [""] * len(merged))]
+    merged["title_pl"] = merged["title"]
+    merged["title_en"] = merged["title"]
 
     if "vote_average" not in merged.columns:
         merged["vote_average"] = 0.0
@@ -108,10 +134,41 @@ def get_all_movies():
     return list(get_movie_dict().values())
 
 
-def get_movie_by_id(movie_id: int):
-    """O(1) movie lookup by movie_id."""
+def get_movie_by_id(movie_id: int, lang: str = "PL"):
+    """O(1) movie lookup by movie_id with language localization."""
     try:
-        return get_movie_dict().get(int(movie_id))
+        raw = get_movie_dict().get(int(movie_id))
+        if not raw:
+            return None
+        movie = dict(raw)
+        lang_upper = (lang or "PL").upper()
+        lang_lower = lang_upper.lower()
+
+        if lang_upper == "PL":
+            if movie.get("overview_pl"):
+                movie["overview"] = movie["overview_pl"]
+            if movie.get("title_pl"):
+                movie["title"] = movie["title_pl"]
+            if movie.get("tagline_pl"):
+                movie["tagline"] = movie["tagline_pl"]
+        else:
+            if movie.get(f"overview_{lang_lower}"):
+                movie["overview"] = movie[f"overview_{lang_lower}"]
+            elif movie.get("overview_en"):
+                movie["overview"] = movie["overview_en"]
+
+            if movie.get(f"title_{lang_lower}"):
+                movie["title"] = movie[f"title_{lang_lower}"]
+            elif movie.get("title_en"):
+                movie["title"] = movie["title_en"]
+
+            if movie.get(f"tagline_{lang_lower}"):
+                movie["tagline"] = movie[f"tagline_{lang_lower}"]
+            elif movie.get("tagline_en"):
+                movie["tagline"] = movie["tagline_en"]
+            else:
+                movie["tagline"] = ""
+        return movie
     except (ValueError, TypeError):
         return None
 
@@ -123,7 +180,7 @@ def get_movie_by_index(idx: int):
     return None
 
 
-def get_recommendations(movie_id: int, top_n: int = 10):
+def get_recommendations(movie_id: int, top_n: int = 10, lang: str = "PL"):
     try:
         mid = int(movie_id)
     except (ValueError, TypeError):
@@ -144,12 +201,38 @@ def get_recommendations(movie_id: int, top_n: int = 10):
 
     recommendations = []
     all_movies = get_all_movies()
+    lang_upper = (lang or "PL").upper()
     for neighbor_idx, score in zip(neighbor_indices, neighbor_scores):
         if neighbor_idx < n_movies:
             rec_row = dict(all_movies[neighbor_idx])
             rec_row["match_score"] = int(round(float(score) * 100))
             rec_row["similarity"] = rec_row["match_score"]
-            rec_row["match_reason"] = "Wysokie podobieństwo tematyczne"
+            rec_row["match_reason"] = i18n.t("match_reason_similar", lang)
+            if lang_upper == "PL":
+                if rec_row.get("overview_pl"):
+                    rec_row["overview"] = rec_row["overview_pl"]
+                if rec_row.get("title_pl"):
+                    rec_row["title"] = rec_row["title_pl"]
+                if rec_row.get("tagline_pl"):
+                    rec_row["tagline"] = rec_row["tagline_pl"]
+            else:
+                lang_lower = lang_upper.lower()
+                if rec_row.get(f"overview_{lang_lower}"):
+                    rec_row["overview"] = rec_row[f"overview_{lang_lower}"]
+                elif rec_row.get("overview_en"):
+                    rec_row["overview"] = rec_row["overview_en"]
+
+                if rec_row.get(f"title_{lang_lower}"):
+                    rec_row["title"] = rec_row[f"title_{lang_lower}"]
+                elif rec_row.get("title_en"):
+                    rec_row["title"] = rec_row["title_en"]
+
+                if rec_row.get(f"tagline_{lang_lower}"):
+                    rec_row["tagline"] = rec_row[f"tagline_{lang_lower}"]
+                elif rec_row.get("tagline_en"):
+                    rec_row["tagline"] = rec_row["tagline_en"]
+                else:
+                    rec_row["tagline"] = ""
             recommendations.append(rec_row)
 
     return recommendations
@@ -162,9 +245,26 @@ def search_movies(query: str, lang: str = "PL", limit: int = 12):
     q = query.strip().lower()
     matches = movies_df[movies_df["title"].str.lower().str.contains(q, na=False)]
     local_results = matches.head(limit).to_dict(orient="records")
+    lang_upper = (lang or "PL").upper()
     for r in local_results:
-        r["media_badge"] = "🎬 Film"
+        r["media_badge"] = f"🎬 {i18n.t('badge_movie', lang)}"
         r["media_type"] = "movie"
+        if lang_upper == "PL":
+            if r.get("overview_pl"):
+                r["overview"] = r["overview_pl"]
+            if r.get("title_pl"):
+                r["title"] = r["title_pl"]
+        else:
+            lang_lower = lang_upper.lower()
+            if r.get(f"overview_{lang_lower}"):
+                r["overview"] = r[f"overview_{lang_lower}"]
+            elif r.get("overview_en"):
+                r["overview"] = r["overview_en"]
+
+            if r.get(f"title_{lang_lower}"):
+                r["title"] = r[f"title_{lang_lower}"]
+            elif r.get("title_en"):
+                r["title"] = r["title_en"]
 
     # Also search TMDB for live movies and TV series
     tmdb_results = tmdb.search_tmdb_multi(query, lang=lang, limit=limit)
@@ -196,6 +296,7 @@ def filter_movies(
     sort_by: str = "popularity",
     page: int = 1,
     per_page: int = 24,
+    lang: str = "PL",
 ):
     movies_df, _ = load_dataset()
     df = movies_df.copy()
@@ -230,6 +331,33 @@ def filter_movies(
     end_idx = start_idx + per_page
 
     items = df.iloc[start_idx:end_idx].to_dict(orient="records")
+    lang_upper = (lang or "PL").upper()
+    for item in items:
+        if lang_upper == "PL":
+            if item.get("overview_pl"):
+                item["overview"] = item["overview_pl"]
+            if item.get("title_pl"):
+                item["title"] = item["title_pl"]
+            if item.get("tagline_pl"):
+                item["tagline"] = item["tagline_pl"]
+        else:
+            lang_lower = lang_upper.lower()
+            if item.get(f"overview_{lang_lower}"):
+                item["overview"] = item[f"overview_{lang_lower}"]
+            elif item.get("overview_en"):
+                item["overview"] = item["overview_en"]
+
+            if item.get(f"title_{lang_lower}"):
+                item["title"] = item[f"title_{lang_lower}"]
+            elif item.get("title_en"):
+                item["title"] = item["title_en"]
+
+            if item.get(f"tagline_{lang_lower}"):
+                item["tagline"] = item[f"tagline_{lang_lower}"]
+            elif item.get("tagline_en"):
+                item["tagline"] = item["tagline_en"]
+            else:
+                item["tagline"] = ""
 
     return {
         "items": items,
@@ -350,12 +478,12 @@ def get_trending_content(category: str = "movies", lang: str = "PL") -> list[dic
         results = tmdb.fetch_trending(media_type="movie", time_window="day", lang=lang, limit=12)
 
     if not results:
-        filtered = filter_movies(genre="All", sort_by="vote_desc", per_page=12)
+        filtered = filter_movies(genre="All", sort_by="vote_desc", per_page=12, lang=lang)
         results = filtered.get("items", [])
         for r in results:
             r["media_type"] = "movie"
             r["is_tv"] = False
-            r["media_badge"] = "🎬 Film"
+            r["media_badge"] = f"🎬 {i18n.t('badge_movie', lang)}"
 
     if results:
         cache.set(cache_key, results, timeout=60 * 60 * 4)

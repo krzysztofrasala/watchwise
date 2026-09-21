@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load i18n_tags %}
+
+{% block title %}{{ "offline_title"|t:current_lang }} — Watch Wise 2.0{% endblock %}
+
+{% block content %}
+<div class="min-h-[60vh] flex items-center justify-center py-8 px-4">
+    <div class="glass-panel max-w-lg w-full p-6 sm:p-8 rounded-3xl border border-white/10 text-center space-y-6 shadow-2xl relative overflow-hidden">
+        
+        <!-- Ambient background glow -->
+        <div class="absolute -top-20 -right-20 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-20 -left-20 w-40 h-40 bg-red-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Offline Icon with Animated Halo -->
+        <div class="relative inline-block z-10">
+            <div class="w-20 h-20 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-brand-gold shadow-lg shadow-amber-500/10">
+                <i data-lucide="wifi-off" class="w-10 h-10 text-brand-gold animate-pulse"></i>
+            </div>
+            <span class="absolute -top-1 -right-1 flex h-4 w-4">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
+            </span>
+        </div>
+
+        <!-- Text details -->
+        <div class="space-y-2 relative z-10">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-extrabold text-amber-400 uppercase tracking-wider">
+                {{ "offline_badge"|t:current_lang }}
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                {{ "offline_title"|t:current_lang }}
+            </h1>
+            <p class="text-xs sm:text-sm text-gray-400 max-w-sm mx-auto leading-relaxed">
+                {{ "offline_desc"|t:current_lang }}
+            </p>
+        </div>
+
+        <!-- Action CTA Buttons -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 relative z-10">
+            <button 
+                type="button" 
+                onclick="window.location.reload()" 
+                class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-brand-gold hover:bg-yellow-400 text-black font-extrabold text-sm transition-all shadow-lg shadow-brand-gold/20 flex items-center justify-center gap-2 active:scale-95"
+            >
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                <span>{{ "offline_retry"|t:current_lang }}</span>
+            </button>
+
+            <a 
+                href="{% url 'watchlist' %}" 
+                class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 hover:border-emerald-500/40"
+            >
+                <i data-lucide="bookmark" class="w-4 h-4 text-emerald-400"></i>
+                <span>{{ "offline_saved_watchlist"|t:current_lang }}</span>
+            </a>
+        </div>
+
+        <!-- Cached notice footnote -->
+        <div class="pt-4 border-t border-white/5 text-[11px] text-gray-500 flex items-center justify-center gap-1.5 relative z-10">
+            <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-gray-400"></i>
+            <span>{{ "offline_cached_notice"|t:current_lang }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

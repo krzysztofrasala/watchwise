@@ -1,6 +1,6 @@
 {% load i18n_tags %}
-<div id="vod-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onclick="if(event.target === this) this.remove()">
-    <div class="glass-panel w-full max-w-lg rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden" onclick="event.stopPropagation()">
+<div id="vod-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in" onclick="if(event.target === this) this.remove()">
+    <div class="glass-panel w-full max-w-lg rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl p-5 sm:p-6 md:p-8 space-y-5 sm:space-y-6 relative overflow-y-auto max-h-[90vh]" onclick="event.stopPropagation()">
         <!-- Background Ambient Glow -->
         <div class="absolute -top-20 -right-20 w-48 h-48 bg-brand-gold/15 rounded-full blur-3xl pointer-events-none"></div>
         <div class="absolute -bottom-20 -left-20 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
@@ -28,8 +28,12 @@
         <!-- Form with Services Grid -->
         <form 
             hx-post="{% url 'set_vod_subscriptions' %}" 
+            {% if is_watchlist %}
             hx-target="#watchlist-grid-container" 
             hx-swap="outerHTML" 
+            {% else %}
+            hx-swap="none"
+            {% endif %}
             class="space-y-6 relative z-10"
         >
             {% csrf_token %}
@@ -76,7 +80,7 @@
                     onclick="document.getElementById('vod-modal').remove()" 
                     class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition-all"
                 >
-                    Anuluj
+                    {{ "cancel"|t:current_lang }}
                 </button>
                 <button 
                     type="submit" 

@@ -6,10 +6,10 @@
 {% block content %}
 <div class="space-y-6 py-4">
     <!-- Header Section -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4 sm:pb-5">
         <div>
-            <h1 class="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-                <i data-lucide="bookmark" class="w-8 h-8 text-emerald-400"></i> {{ "my_watchlist"|t:current_lang }}
+            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5 sm:gap-3">
+                <i data-lucide="bookmark" class="w-6 h-6 sm:w-8 h-8 text-emerald-400"></i> {{ "my_watchlist"|t:current_lang }}
             </h1>
             <p class="text-xs text-gray-400 mt-1">{{ "saved_movies_for_later"|t:current_lang }}</p>
         </div>
@@ -20,7 +20,7 @@
                 type="button"
                 hx-get="{% url 'vod_subscription_modal' %}" 
                 hx-target="#vod-modal-container"
-                class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm group hover:border-brand-gold/40"
+                class="w-full sm:w-auto justify-center px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm group hover:border-brand-gold/40"
             >
                 <i data-lucide="tv" class="w-4 h-4 text-brand-gold group-hover:scale-110 transition-transform"></i>
                 <span>{{ "my_vod_subscriptions"|t:current_lang }}</span>
@@ -32,12 +32,12 @@
     </div>
 
     <!-- Tabs: Watchlist vs Watched -->
-    <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+    <div class="flex items-center gap-2 sm:gap-3 border-b border-white/10 pb-3 overflow-x-auto scrollbar-none">
         <button 
             type="button"
             id="tab-btn-watchlist"
             onclick="switchTab('watchlist')"
-            hx-get="{% url 'watchlist_grid_partial' %}?tab=watchlist&vod={{ vod_filter|default:'all' }}" 
+            hx-get="{% url 'watchlist_grid_partial' %}?tab=watchlist&vod={{ vod_filter|default:'all' }}&only_subs={% if only_subs %}1{% else %}0{% endif %}&view_mode={{ view_mode|default:'grid' }}" 
             hx-target="#watchlist-grid-container" 
             hx-swap="outerHTML"
             class="tab-btn px-4 py-2 rounded-xl font-black text-xs md:text-sm flex items-center gap-2 transition-all border
@@ -58,7 +58,7 @@
             type="button"
             id="tab-btn-watched"
             onclick="switchTab('watched')"
-            hx-get="{% url 'watchlist_grid_partial' %}?tab=watched&vod={{ vod_filter|default:'all' }}" 
+            hx-get="{% url 'watchlist_grid_partial' %}?tab=watched&vod={{ vod_filter|default:'all' }}&only_subs={% if only_subs %}1{% else %}0{% endif %}&view_mode={{ view_mode|default:'grid' }}" 
             hx-target="#watchlist-grid-container" 
             hx-swap="outerHTML"
             class="tab-btn px-4 py-2 rounded-xl font-black text-xs md:text-sm flex items-center gap-2 transition-all border

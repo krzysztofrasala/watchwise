@@ -4,7 +4,7 @@
 {% block title %}{{ "roulette_title"|t:current_lang }} — Watch Wise 2.0{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-8 text-center py-6 relative">
+<div class="max-w-4xl mx-auto space-y-6 sm:space-y-8 text-center py-3 sm:py-6 relative">
 
     <!-- Confetti FX Canvas -->
     <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
@@ -14,11 +14,11 @@
         <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-black uppercase tracking-wider shadow-sm">
             <i data-lucide="dices" class="w-4 h-4"></i> {{ "what_are_we_watching"|t:current_lang }}
         </div>
-        <h1 class="text-3xl md:text-5xl font-black text-white tracking-tight">
+        <h1 class="text-2xl sm:text-3xl md:text-5xl font-black text-white tracking-tight">
             {{ "roulette_title"|t:current_lang }} 2.0
         </h1>
         <p class="text-xs md:text-sm text-gray-400 max-w-lg mx-auto leading-relaxed">
-            Nie wiesz co wybrać na wieczorny seans? Ustaw nastrój, czas i platformy VOD, a silnik WatchWise wytypuje idealny tytuł!
+            {{ "roulette_desc"|t:current_lang }}
         </p>
     </div>
 
@@ -30,7 +30,7 @@
         hx-swap="innerHTML"
         hx-indicator="#spin-loader"
         onsubmit="handleSpinStart(event)"
-        class="glass-panel p-6 md:p-8 rounded-3xl space-y-6 max-w-2xl mx-auto shadow-2xl border border-white/10 text-left relative overflow-hidden"
+        class="glass-panel p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl space-y-5 sm:space-y-6 max-w-2xl mx-auto shadow-2xl border border-white/10 text-left relative overflow-hidden"
     >
         <!-- Background Ambient Glow -->
         <div class="absolute -top-24 -right-24 w-48 h-48 bg-purple-600/15 rounded-full blur-3xl pointer-events-none"></div>
@@ -41,9 +41,9 @@
             <label class="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                 <i data-lucide="folder-search" class="w-3.5 h-3.5 text-brand-gold"></i> {{ "source_label"|t:current_lang }}
             </label>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
                 {% for s in sources %}
-                <label class="cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none
+                <label class="cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all text-xs font-bold select-none
                     {% if selected_source == s.val %}
                     bg-brand-gold/15 border-brand-gold/50 text-white shadow-md
                     {% else %}
@@ -52,11 +52,95 @@
                     onclick="updateSourceActive(this)"
                 >
                     <input type="radio" name="source" value="{{ s.val }}" class="sr-only" {% if selected_source == s.val %}checked{% endif %}>
-                    <i data-lucide="{{ s.icon }}" class="w-4 h-4 text-brand-gold shrink-0"></i>
-                    <span class="truncate">{{ s.label_key|t:current_lang }}</span>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="{{ s.icon }}" class="w-4 h-4 text-brand-gold shrink-0"></i>
+                        <span class="truncate">{{ s.label_key|t:current_lang }}</span>
+                    </div>
+                    {% if s.desc_key %}
+                    <span class="text-[10px] text-gray-400 font-normal mt-1 line-clamp-1 group-hover:text-gray-300">{{ s.desc_key|t:current_lang }}</span>
+                    {% endif %}
                 </label>
                 {% endfor %}
             </div>
+        </div>
+
+        <!-- 1b. VOD Platform & Subscription Options (Dynamic Sub-panel) -->
+        <div id="vod-subpanel" class="p-4 rounded-2xl bg-white/[0.03] border border-brand-gold/20 space-y-3 relative z-10 {% if selected_source != 'watchlist_vod' and selected_source != 'my_vod' %}hidden{% endif %}">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2.5">
+                <span class="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i data-lucide="tv" class="w-3.5 h-3.5"></i> {{ "filter_target_vod"|t:current_lang }}
+                </span>
+                <button 
+                    type="button" 
+                    hx-get="{% url 'vod_subscription_modal' %}" 
+                    hx-target="#vod-modal-container" 
+                    class="text-[11px] text-gray-400 hover:text-white flex items-center gap-1 transition-colors self-start sm:self-auto"
+                >
+                    <i data-lucide="settings-2" class="w-3.5 h-3.5 text-brand-gold"></i>
+                    <span>{{ "configure_vod_subs"|t:current_lang }}</span>
+                </button>
+            </div>
+
+            {% if my_subscriptions %}
+            <!-- Subscribed Platforms Chips -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <label class="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all select-none
+                    {% if selected_target_vod == 'any' or not selected_target_vod %}
+                    bg-brand-gold/20 border-brand-gold/60 text-white shadow-sm
+                    {% else %}
+                    bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white
+                    {% endif %}"
+                    onclick="updateVodTargetActive(this)"
+                >
+                    <input type="radio" name="target_vod" value="any" class="sr-only" {% if selected_target_vod == 'any' or not selected_target_vod %}checked{% endif %}>
+                    <span>{{ "target_vod_any"|t:current_lang }}</span>
+                </label>
+
+                {% for s in subscribed_services %}
+                <label class="cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all select-none
+                    {% if selected_target_vod == s.id|stringformat:'s' %}
+                    bg-brand-gold/20 border-brand-gold/60 text-white shadow-sm
+                    {% else %}
+                    bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white
+                    {% endif %}"
+                    onclick="updateVodTargetActive(this)"
+                >
+                    <input type="radio" name="target_vod" value="{{ s.id }}" class="sr-only" {% if selected_target_vod == s.id|stringformat:'s' %}checked{% endif %}>
+                    <img src="{{ s.logo_url }}" alt="{{ s.name }}" class="w-4 h-4 rounded object-cover">
+                    <span>{{ s.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+
+            <!-- Flatrate Subscription Only Toggle -->
+            <div class="flex items-center gap-2 pt-1 border-t border-white/5">
+                <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+                    <input 
+                        type="checkbox" 
+                        name="only_subs" 
+                        value="1" 
+                        class="w-4 h-4 rounded border-white/20 bg-white/5 text-brand-gold focus:ring-0 focus:outline-none cursor-pointer"
+                        {% if only_subs %}checked{% endif %}
+                    >
+                    <span class="text-xs text-gray-300 font-medium">
+                        {{ "filter_only_subscriptions"|t:current_lang }}
+                    </span>
+                </label>
+            </div>
+            {% else %}
+            <!-- Warning Prompt if 0 subscriptions -->
+            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <span>{{ "no_vod_subs_prompt"|t:current_lang }}</span>
+                <button 
+                    type="button" 
+                    hx-get="{% url 'vod_subscription_modal' %}" 
+                    hx-target="#vod-modal-container"
+                    class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] border border-amber-500/30 whitespace-nowrap transition-all"
+                >
+                    {{ "configure_vod_subs"|t:current_lang }}
+                </button>
+            </div>
+            {% endif %}
         </div>
 
         <!-- 2. Mood / Vibe Picker (Pills) -->
@@ -157,6 +241,8 @@
 
     <!-- Container for Movie Detail Modal -->
     <div id="movie-modal-container"></div>
+    <!-- Container for VOD Subscriptions Modal -->
+    <div id="vod-modal-container"></div>
 </div>
 
 <script>
@@ -249,9 +335,27 @@
     function updateSourceActive(label) {
         const labels = label.parentElement.querySelectorAll('label');
         labels.forEach(l => {
-            l.className = 'cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white';
+            l.className = 'cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white';
         });
-        label.className = 'cursor-pointer group flex items-center gap-2 p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-brand-gold/15 border-brand-gold/50 text-white shadow-md';
+        label.className = 'cursor-pointer group flex flex-col p-2.5 rounded-xl border transition-all text-xs font-bold select-none bg-brand-gold/15 border-brand-gold/50 text-white shadow-md';
+
+        const radio = label.querySelector('input[name="source"]');
+        const vodPanel = document.getElementById('vod-subpanel');
+        if (vodPanel && radio) {
+            if (radio.value === 'watchlist_vod' || radio.value === 'my_vod') {
+                vodPanel.classList.remove('hidden');
+            } else {
+                vodPanel.classList.add('hidden');
+            }
+        }
+    }
+
+    function updateVodTargetActive(label) {
+        const labels = label.parentElement.querySelectorAll('label');
+        labels.forEach(l => {
+            l.className = 'cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all select-none bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white';
+        });
+        label.className = 'cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all select-none bg-brand-gold/20 border-brand-gold/60 text-white shadow-sm';
     }
 
     function updateMoodActive(label) {
