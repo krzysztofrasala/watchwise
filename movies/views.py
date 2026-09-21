@@ -652,7 +652,8 @@ def roulette_spin_partial(request):
                             vod_cands.append(mid)
         # Also check top rated movies from local dataset if needed
         if len(vod_cands) < 15:
-            for item in services.filter_movies(sort_by="rating_desc")[:80]:
+            top_movies = services.filter_movies(genre="All", sort_by="vote_desc", per_page=40, lang=lang).get("items", [])
+            for item in top_movies:
                 mid = item.get("movie_id")
                 if mid and mid not in vod_cands:
                     t_info = tmdb.fetch_movie_details(mid, lang=lang)
@@ -660,6 +661,8 @@ def roulette_spin_partial(request):
                         provs = t_info.get("vod_flatrate", []) if only_subs else t_info.get("vod_providers", [])
                         if any(p.get("id") in target_pids for p in provs):
                             vod_cands.append(mid)
+                            if len(vod_cands) >= 20:
+                                break
         candidate_ids = list(set(vod_cands))
 
     if candidate_ids is not None and not candidate_ids:

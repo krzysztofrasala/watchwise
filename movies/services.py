@@ -315,7 +315,7 @@ def filter_movies(
     if language:
         df = df[df["original_language"].str.lower() == language.lower()]
 
-    if sort_by == "vote_desc":
+    if sort_by in ("vote_desc", "rating_desc"):
         df = df.sort_values(by="vote_average", ascending=False)
     elif sort_by == "vote_asc":
         df = df.sort_values(by="vote_average", ascending=True)
