@@ -40,3 +40,48 @@ h1, h2, h3, h4, .font-display {
 ::-webkit-scrollbar-thumb:hover {
     background: #F5C518;
 }
+
+/* Mobile Touch & Scroll Optimizations */
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.safe-area-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Mobile Drawer Slide Transition */
+#mobile-drawer-sheet {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-closed #mobile-drawer-sheet {
+    transform: translateX(100%);
+}
+
+.drawer-open #mobile-drawer-sheet {
+    transform: translateX(0);
+}
+
+.drawer-closed #mobile-drawer-backdrop {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.drawer-open #mobile-drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Ensure inputs on iOS mobile don't trigger unwanted zoom */
+@media screen and (max-width: 768px) {
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+}
+

@@ -1,0 +1,62 @@
+{
+  "id": "watch-wise-cinescope-pwa",
+  "name": "Watch Wise — Twój Przewodnik Kinowy i VOD",
+  "short_name": "Watch Wise",
+  "description": "Odkrywaj filmy, zarządzaj biblioteką VOD, losuj seanse i sprawdzaj gdzie oglądać legalnie w abonamencie.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0A0B0E",
+  "theme_color": "#0F1016",
+  "categories": ["entertainment", "movies", "lifestyle"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Odkrywaj",
+      "short_name": "Odkrywaj",
+      "description": "Filtrowanie zaawansowane Discover Pro",
+      "url": "/discover/",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ruletka VOD",
+      "short_name": "Ruletka",
+      "description": "Co oglądamy dziś wieczorem?",
+      "url": "/roulette/",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Moja Watchlista",
+      "short_name": "Watchlista",
+      "description": "Filmy i seriale zapisane na później",
+      "url": "/watchlist/",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

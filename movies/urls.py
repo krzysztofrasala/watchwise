@@ -24,7 +24,11 @@ urlpatterns = [
     path('assistant/chat/', views.assistant_chat_partial, name='assistant_chat_partial'),
     path('profile/switch/', views.switch_profile, name='switch_profile'),
     path('profile/create/', views.create_profile, name='create_profile'),
-    path('profile/export/', views.export_profile, name='export_profile'),
-    path('profile/import/', views.import_profile, name='import_profile'),
     path('language/switch/', views.switch_language, name='switch_language'),
+
+    # PWA Endpoints
+    path('manifest.json', views.manifest_view, name='pwa_manifest'),
+    path('sw.js', views.service_worker_view, name='service_worker'),
+    path('offline/', views.offline_view, name='offline'),
 ]
+

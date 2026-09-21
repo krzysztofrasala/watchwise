@@ -1,0 +1,104 @@
+{% load i18n_tags %}
+<div 
+    class="glass-card rounded-2xl overflow-hidden cursor-pointer flex flex-col justify-between group relative border border-white/10 hover:border-amber-500/50 transition-all duration-300 shadow-lg"
+    hx-get="{% url 'movie_modal_partial' movie.movie_id %}{% if movie.is_tv %}?media_type=tv{% endif %}"
+    hx-target="#movie-modal-container"
+    hx-push-url="/movie/{{ movie.movie_id }}/"
+>
+    <!-- Poster Image -->
+    <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
+        <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+        
+        <!-- Rating Badge -->
+        <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[11px] font-extrabold px-2 py-0.5 rounded-md border border-brand-gold/30 flex items-center gap-1 shadow-md z-10">
+            <i data-lucide="star" class="w-3 h-3 fill-brand-gold"></i> {{ movie.vote_average }}
+        </div>
+
+        <!-- Media Badge (TV / Movie) -->
+        {% if movie.media_badge %}
+        <div class="absolute top-2 left-10 bg-black/70 backdrop-blur-md text-gray-200 text-[10px] font-bold px-1.5 py-0.2 rounded border border-white/20 z-10">
+            {{ movie.media_badge }}
+        </div>
+        {% endif %}
+
+        <!-- Quick Action: Mark as Watched / Watchlist Button -->
+        <div class="absolute top-2 left-2 z-20" onclick="event.stopPropagation()">
+            <button 
+                type="button"
+                hx-post="{% url 'toggle_watched' movie.movie_id %}"
+                hx-target="#watchlist-grid-container"
+                hx-swap="outerHTML"
+                title="{% if movie.is_watched %}{{ 'marked_as_watched'|t:current_lang }}{% else %}{{ 'mark_as_watched'|t:current_lang }}{% endif %}"
+                class="w-7 h-7 rounded-lg flex items-center justify-center backdrop-blur-md transition-all border shadow
+                {% if movie.is_watched %}
+                bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400
+                {% else %}
+                bg-black/60 text-gray-300 hover:text-white border-white/20 hover:bg-emerald-500 hover:text-black hover:border-emerald-400
+                {% endif %}"
+            >
+                <i data-lucide="check" class="w-4 h-4 stroke-[2.5]"></i>
+            </button>
+        </div>
+
+        <!-- Available on User's VOD Ribbon -->
+        {% if movie.is_available_on_my_flatrate and movie.primary_vod_name %}
+        <div class="absolute bottom-2 left-2 right-2 z-20" onclick="event.stopPropagation()">
+            {% if movie.primary_vod_url %}
+            <a 
+                href="{{ movie.primary_vod_url }}" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="w-full py-1 px-2 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-black font-extrabold text-[10px] flex items-center justify-between shadow-lg backdrop-blur-md transition-all group/vod"
+                title="{{ 'watch_now_on'|t:current_lang }} {{ movie.primary_vod_name }}"
+            >
+                <span class="flex items-center gap-1.5 truncate">
+                    {% if movie.primary_vod_logo %}
+                    <img src="{{ movie.primary_vod_logo }}" class="w-3.5 h-3.5 rounded object-cover">
+                    {% endif %}
+                    <span class="truncate">{{ movie.primary_vod_name }}</span>
+                </span>
+                <i data-lucide="external-link" class="w-3 h-3 shrink-0"></i>
+            </a>
+            {% else %}
+            <div class="py-0.5 px-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1 backdrop-blur-md">
+                {% if movie.primary_vod_logo %}
+                <img src="{{ movie.primary_vod_logo }}" class="w-3.5 h-3.5 rounded object-cover">
+                {% endif %}
+                <span class="truncate">{{ movie.primary_vod_name }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% elif movie.vod_providers %}
+        <!-- Generic VOD mini icons if not in user's subscriptions -->
+        <div class="absolute bottom-2 left-2 flex items-center gap-1 z-20 pointer-events-none">
+            {% for prov in movie.vod_providers|slice:":3" %}
+            {% if prov.logo_url %}
+            <img src="{{ prov.logo_url }}" alt="{{ prov.name }}" class="w-4 h-4 rounded-md shadow border border-white/20 object-cover" title="{{ prov.name }}">
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Hover Play Icon -->
+        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+            <div class="w-10 h-10 rounded-full bg-brand-gold text-black flex items-center justify-center shadow-xl scale-75 group-hover:scale-100 transition-transform">
+                <i data-lucide="play" class="w-4 h-4 fill-black translate-x-0.5"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Info -->
+    <div class="p-3 space-y-1">
+        <h3 class="font-bold text-xs md:text-sm text-white line-clamp-1 group-hover:text-brand-gold transition-colors">
+            {{ movie.title }}
+        </h3>
+        <div class="flex items-center justify-between text-[11px] text-gray-400">
+            <span>{{ movie.year|default:"" }}</span>
+            {% if movie.user_rating > 0 %}
+            <span class="text-brand-gold font-bold flex items-center gap-0.5">
+                <i data-lucide="star" class="w-3 h-3 fill-brand-gold"></i> {{ movie.user_rating }}/5
+            </span>
+            {% endif %}
+        </div>
+    </div>
+</div>
