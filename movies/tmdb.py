@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
 DEFAULT_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=500&auto=format&fit=crop"
-DEFAULT_API_KEY = "REMOVED"
 
 _session: requests.Session | None = None
 
@@ -97,7 +96,7 @@ def get_supported_vod_services() -> list[dict]:
 
 
 def get_api_key() -> str:
-    return os.getenv("TMDB_API_KEY", "").strip() or DEFAULT_API_KEY
+    return os.getenv("TMDB_API_KEY", "").strip()
 
 def get_poster_url(poster_path: str | None, size: str = "w500") -> str:
     if not poster_path:
