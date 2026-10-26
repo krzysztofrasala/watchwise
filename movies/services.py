@@ -243,7 +243,7 @@ def search_movies(query: str, lang: str = "PL", limit: int = 12):
         return []
     movies_df, _ = load_dataset()
     q = query.strip().lower()
-    matches = movies_df[movies_df["title"].str.lower().str.contains(q, na=False)]
+    matches = movies_df[movies_df["title"].str.lower().str.contains(q, na=False, regex=False)]
     local_results = matches.head(limit).to_dict(orient="records")
     lang_upper = (lang or "PL").upper()
     for r in local_results:

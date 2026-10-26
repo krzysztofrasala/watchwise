@@ -5,11 +5,13 @@ import re
 import html
 import base64
 import subprocess
+import sys
 import logging
 import urllib.parse
 from urllib.parse import quote, unquote
 from functools import lru_cache
 import requests
+from django.core.cache import cache
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from . import i18n
@@ -40,8 +42,11 @@ def get_session() -> requests.Session:
     return _session
 
 
-def _tmdb_get(url: str, params: dict, timeout: int = 4) -> dict | None:
-    """Execute TMDB request with fast curl execution to prevent macOS LibreSSL TLS renegotiation hangs."""
+VOD_CACHE_TTL = 60 * 60 * 6  # provider availability changes slowly
+DETAILS_CACHE_TTL = 60 * 60 * 6
+
+
+def _tmdb_get_curl(url: str, params: dict, timeout: int) -> dict | None:
     query_str = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     full_url = f"{url}?{query_str}"
     try:
@@ -57,14 +62,59 @@ def _tmdb_get(url: str, params: dict, timeout: int = 4) -> dict | None:
                 return data
     except Exception:
         pass
+    return None
 
+
+def _tmdb_get_requests(url: str, params: dict, timeout: int) -> dict | None:
     try:
         res = get_session().get(url, params=params, timeout=timeout)
-        if res.status_code == 200:
-            return res.json()
+        # 404 bodies carry TMDB's status_code, which callers use to detect "not a movie"
+        if res.status_code in (200, 404):
+            data = res.json()
+            if isinstance(data, dict):
+                return data
     except Exception:
         pass
     return None
+
+
+def _tmdb_get(url: str, params: dict, timeout: int = 4) -> dict | None:
+    """Execute a TMDB request.
+
+    curl goes first on macOS to avoid LibreSSL TLS renegotiation hangs; everywhere else the pooled
+    requests session is much cheaper than forking a process per call.
+    """
+    attempts = (_tmdb_get_curl, _tmdb_get_requests) if sys.platform == "darwin" else (_tmdb_get_requests, _tmdb_get_curl)
+    for attempt in attempts:
+        data = attempt(url, params, timeout)
+        if data is not None:
+            return data
+    return None
+
+
+def _http_get_text(url: str, timeout: int = 8) -> str:
+    """Fetch a page as text (same macOS/curl vs requests policy as _tmdb_get)."""
+    def _curl() -> str:
+        proc = subprocess.run(
+            ["curl", "--compressed", "-s", "--connect-timeout", "4", "-m", str(timeout), url],
+            capture_output=True,
+            text=True
+        )
+        return proc.stdout if proc.returncode == 0 else ""
+
+    def _requests() -> str:
+        res = get_session().get(url, timeout=timeout)
+        return res.text if res.status_code == 200 else ""
+
+    attempts = (_curl, _requests) if sys.platform == "darwin" else (_requests, _curl)
+    for attempt in attempts:
+        try:
+            text = attempt()
+            if text:
+                return text
+        except Exception:
+            continue
+    return ""
 
 
 # Provider IDs for popular VOD platforms in Poland / Global
@@ -136,14 +186,10 @@ def get_provider_direct_url(provider_name: str, provider_id: int | None = None, 
         return f"https://www.netflix.com/search?q={title_q}"
     elif "prime" in name_lower or "amazon" in name_lower or provider_id in [9, 10, 119]:
         return f"https://www.primevideo.com/search/ref=atv_nb_sr?phrase={title_q}"
-    elif "disney" in name_lower or provider_id == 337:
-        return f"https://www.disneyplus.com/search?q={title_q}"
-    elif "max" in name_lower or "hbo" in name_lower or provider_id in [1899, 384]:
-        return f"https://www.max.com/search?q={title_q}"
+    # Disney+, Max/HBO Max, SkyShowtime and Polsat Box Go have no URL-based search (their /search?q= 404s),
+    # so they intentionally fall through to the JustWatch link below, which resolves to the real title page.
     elif "apple" in name_lower or "itunes" in name_lower or provider_id in [350, 2]:
         return f"https://tv.apple.com/search?term={title_q}"
-    elif "skyshowtime" in name_lower or provider_id == 1773:
-        return f"https://www.skyshowtime.com/search?q={title_q}"
     elif "crunchyroll" in name_lower or provider_id in [283, 1968]:
         return f"https://www.crunchyroll.com/search?q={title_q}"
     elif "paramount" in name_lower or provider_id == 531:
@@ -156,8 +202,6 @@ def get_provider_direct_url(provider_name: str, provider_id: int | None = None, 
     elif "player" in name_lower or provider_id == 505:
         # Player.pl does not support search query params (returns 404); fallback to justwatch_url with working deep redirect
         return justwatch_url if justwatch_url else "https://player.pl"
-    elif "polsat" in name_lower:
-        return f"https://polsatboxgo.pl/szukaj?phrase={title_q}"
     elif "rakuten" in name_lower or provider_id == 35:
         return f"https://www.rakuten.tv/search?q={title_q}"
     elif "youtube" in name_lower or provider_id == 192:
@@ -200,20 +244,27 @@ def get_search_deeplinks(title: str) -> list[dict]:
     return []
 
 
-@lru_cache(maxsize=300)
 def get_direct_provider_links(watch_url: str) -> dict:
-    """Fetch TMDB watch page (powered by JustWatch) and extract exact direct provider streaming links."""
+    """Exact provider deep links for a TMDB watch page, cached only when the lookup succeeded."""
     if not watch_url:
         return {}
+    key = f"directlinks_{abs(hash(watch_url))}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    links = _scrape_direct_provider_links(watch_url)
+    if links:  # an empty result is usually a transient block/timeout: retry next time
+        cache.set(key, links, VOD_CACHE_TTL)
+    return links
+
+
+def _scrape_direct_provider_links(watch_url: str) -> dict:
+    """Fetch TMDB watch page (powered by JustWatch) and extract exact direct provider streaming links."""
     try:
-        proc = subprocess.run(
-            ["curl", "--compressed", "-s", "--connect-timeout", "4", "-m", "8", watch_url],
-            capture_output=True,
-            text=True
-        )
-        if proc.returncode != 0 or not proc.stdout:
+        page = _http_get_text(watch_url, timeout=8)
+        if not page:
             return {}
-        matches = re.findall(r'href=[\"\'](https://click\.justwatch\.com[^\'\"]+)[\"\']', proc.stdout)
+        matches = re.findall(r'href=[\"\'](https://click\.justwatch\.com[^\'\"]+)[\"\']', page)
         links = {}
         for raw_url in matches:
             clean_url = html.unescape(raw_url)
@@ -438,8 +489,7 @@ def get_offline_vod(movie_id: int, title: str = "", lang: str = "PL") -> dict | 
     }
 
 
-@lru_cache(maxsize=300)
-def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None) -> dict | None:
+def _fetch_movie_details_uncached(movie_id: int, lang: str = "PL", media_type: str = None) -> dict | None:
     api_key = get_api_key()
     if not api_key:
         return get_offline_vod(movie_id, lang=lang)
@@ -627,6 +677,74 @@ def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None)
     except Exception:
         pass
     return None
+
+
+def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None) -> dict | None:
+    """Full details (trailer, cast, exact VOD deep links). Heavy: use for a single title, not for lists."""
+    key = f"details_{(lang or 'PL').upper()}_{media_type or 'auto'}_{movie_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    details = _fetch_movie_details_uncached(movie_id, lang=lang, media_type=media_type)
+    if details:  # never cache failures
+        cache.set(key, details, DETAILS_CACHE_TTL)
+    return details
+
+
+REGION_BY_LANG = {"PL": "PL", "EN": "US", "DE": "DE", "ES": "ES", "FR": "FR", "IT": "IT"}
+EMPTY_VOD = {"vod_flatrate": [], "vod_rent": [], "vod_buy": [], "vod_providers": [], "justwatch_url": None}
+
+
+def fetch_vod_info(movie_id: int, lang: str = "PL", media_type: str = None, title: str = "") -> dict:
+    """Lightweight VOD availability for list/grid badges: a single TMDB request, cached.
+
+    Provider links are platform search URLs; exact deep links are only resolved by fetch_movie_details.
+    """
+    lang_code = (lang or "PL").upper()
+    endpoint = "tv" if media_type == "tv" else "movie"
+    key = f"vodinfo_{lang_code}_{endpoint}_{movie_id}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    api_key = get_api_key()
+    data = None
+    if api_key:
+        data = _tmdb_get(f"{BASE_URL}/{endpoint}/{movie_id}/watch/providers", {"api_key": api_key}, timeout=4)
+    if not data or data.get("status_code") or "results" not in data:
+        # Transient failure or no key: serve offline data but do not cache it
+        return get_offline_vod(movie_id, title=title, lang=lang) or dict(EMPTY_VOD)
+
+    region_code = REGION_BY_LANG.get(lang_code, "PL")
+    results = data.get("results", {})
+    reg = results.get(region_code) or results.get("PL") or {}
+
+    justwatch_url = reg.get("link") or (get_justwatch_url(title, lang=lang) if title else None)
+    vod_flatrate = [_format_provider(p, title, justwatch_url, region_code, "flatrate") for p in reg.get("flatrate", [])]
+    vod_rent = [_format_provider(p, title, justwatch_url, region_code, "rent") for p in reg.get("rent", [])]
+    vod_buy = [_format_provider(p, title, justwatch_url, region_code, "buy") for p in reg.get("buy", [])]
+
+    vod_list, seen = [], set()
+    for p in vod_flatrate + vod_rent + vod_buy:
+        if p["id"] not in seen:
+            seen.add(p["id"])
+            vod_list.append(p)
+
+    if not vod_list:
+        offline = get_offline_vod(movie_id, title=title, lang=lang)
+        if offline:
+            vod_flatrate, vod_rent = offline["vod_flatrate"], offline["vod_rent"]
+            vod_buy, vod_list = offline["vod_buy"], offline["vod_providers"]
+
+    info = {
+        "vod_flatrate": vod_flatrate,
+        "vod_rent": vod_rent,
+        "vod_buy": vod_buy,
+        "vod_providers": vod_list,
+        "justwatch_url": justwatch_url,
+    }
+    cache.set(key, info, VOD_CACHE_TTL)
+    return info
 
 
 def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict]:

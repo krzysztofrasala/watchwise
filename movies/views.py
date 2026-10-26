@@ -99,6 +99,25 @@ def enrich_movie_with_user_vod(item: dict, my_subs=None):
     return item
 
 
+def attach_vod(item: dict, lang: str, my_subs=None) -> dict:
+    """Attach cached VOD availability to a list item and match it against the user's subscriptions."""
+    mid = item.get("movie_id")
+    if mid:
+        info = tmdb.fetch_vod_info(mid, lang=lang, media_type=item.get("media_type"), title=item.get("title") or "")
+        item["vod_flatrate"] = info.get("vod_flatrate", [])
+        item["vod_providers"] = info.get("vod_providers", [])
+        if info.get("justwatch_url"):
+            item["justwatch_url"] = info["justwatch_url"]
+    return enrich_movie_with_user_vod(item, my_subs)
+
+
+def attach_vod_parallel(items: list[dict], lang: str, my_subs=None) -> list[dict]:
+    if not items:
+        return items
+    with ThreadPoolExecutor(max_workers=min(len(items), 8)) as executor:
+        return list(executor.map(lambda it: attach_vod(it, lang, my_subs), items))
+
+
 def get_base_context(request) -> dict:
     lang = i18n.get_lang(request.session)
     raw_active = profiles.get_active_profile_name(request.session)
@@ -143,21 +162,7 @@ def index(request):
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
 
-    # Enrich catalog items with TMDB VOD data in background
-    def _enrich_cat(item):
-        mid = item.get("movie_id")
-        if mid:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang)
-            if t_info:
-                item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                item["vod_providers"] = t_info.get("vod_providers", [])
-                item["justwatch_url"] = t_info.get("justwatch_url")
-        enrich_movie_with_user_vod(item, my_subs)
-        return item
-
-    if filtered["items"]:
-        with ThreadPoolExecutor(max_workers=min(len(filtered["items"]), 8)) as executor:
-            filtered["items"] = list(executor.map(_enrich_cat, filtered["items"]))
+    filtered["items"] = attach_vod_parallel(filtered["items"], lang, my_subs)
 
     hero_movie = None
     if filtered["items"]:
@@ -200,21 +205,7 @@ def index(request):
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
 
-    # Enrich trending items with VOD
-    def _enrich_trending(item):
-        mid = item.get("movie_id")
-        if mid:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang, media_type=item.get("media_type"))
-            if t_info:
-                item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                item["vod_providers"] = t_info.get("vod_providers", [])
-                item["justwatch_url"] = t_info.get("justwatch_url")
-        enrich_movie_with_user_vod(item, my_subs)
-        return item
-
-    if trending_items:
-        with ThreadPoolExecutor(max_workers=min(len(trending_items), 8)) as executor:
-            trending_items = list(executor.map(_enrich_trending, trending_items))
+    trending_items = attach_vod_parallel(trending_items, lang, my_subs)
 
     ctx.update({
         "genres": genres,
@@ -255,32 +246,21 @@ def trending_partial(request):
         t_shows = services.get_trending_content(category="tv", lang=lang)
         combined = (t_movies + t_shows)
 
-        def _enrich_cand(item):
-            mid = item.get("movie_id")
-            if mid:
-                t_info = tmdb.fetch_movie_details(mid, lang=lang, media_type=item.get("media_type"))
-                if t_info:
-                    item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                    item["vod_providers"] = t_info.get("vod_providers", [])
-                    item["justwatch_url"] = t_info.get("justwatch_url")
-            enrich_movie_with_user_vod(item, my_subs)
-            return item
-
-        with ThreadPoolExecutor(max_workers=min(len(combined), 8)) as executor:
-            enriched = list(executor.map(_enrich_cand, combined))
-
+        enriched = attach_vod_parallel(combined, lang, my_subs)
         my_vod_items = [m for m in enriched if m.get("is_available_on_my_vod")]
 
         # Supplement if pool is small
         if len(my_vod_items) < 6:
-            for top_m in services.filter_movies(sort_by="rating_desc", per_page=40, lang=lang).get("items", []):
-                mid = top_m.get("movie_id")
-                if mid and not any(x.get("movie_id") == mid for x in my_vod_items):
-                    _enrich_cand(top_m)
-                    if top_m.get("is_available_on_my_vod"):
-                        my_vod_items.append(top_m)
-                        if len(my_vod_items) >= 12:
-                            break
+            have = {x.get("movie_id") for x in my_vod_items}
+            extra = [
+                m for m in services.filter_movies(sort_by="rating_desc", per_page=40, lang=lang).get("items", [])
+                if m.get("movie_id") and m["movie_id"] not in have
+            ]
+            for top_m in attach_vod_parallel(extra, lang, my_subs):
+                if top_m.get("is_available_on_my_vod"):
+                    my_vod_items.append(top_m)
+                    if len(my_vod_items) >= 12:
+                        break
 
         ratings = profiles.get_active_ratings(request.session)
         for item in my_vod_items:
@@ -301,20 +281,7 @@ def trending_partial(request):
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
 
-    def _enrich_trending_simple(item):
-        mid = item.get("movie_id")
-        if mid:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang, media_type=item.get("media_type"))
-            if t_info:
-                item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                item["vod_providers"] = t_info.get("vod_providers", [])
-                item["justwatch_url"] = t_info.get("justwatch_url")
-        enrich_movie_with_user_vod(item, my_subs)
-        return item
-
-    if trending_items:
-        with ThreadPoolExecutor(max_workers=min(len(trending_items), 8)) as executor:
-            trending_items = list(executor.map(_enrich_trending_simple, trending_items))
+    trending_items = attach_vod_parallel(trending_items, lang, my_subs)
 
     ctx.update({
         "trending_items": trending_items,
@@ -354,18 +321,7 @@ def movie_grid_partial(request):
         )
         cands = filtered_all["items"]
 
-        def _check_vod(item):
-            mid = item.get("movie_id")
-            if mid:
-                t_info = tmdb.fetch_movie_details(mid, lang=lang)
-                if t_info:
-                    item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                    item["vod_providers"] = t_info.get("vod_providers", [])
-            enrich_movie_with_user_vod(item, target_pids)
-            return item
-
-        with ThreadPoolExecutor(max_workers=min(len(cands), 8)) as executor:
-            cands = list(executor.map(_check_vod, cands))
+        cands = attach_vod_parallel(cands, lang, target_pids)
 
         matched_items = [m for m in cands if m.get("is_available_on_my_vod")]
         for item in matched_items:
@@ -395,18 +351,7 @@ def movie_grid_partial(request):
         lang=lang,
     )
 
-    def _enrich_cat_item(item):
-        mid = item.get("movie_id")
-        if mid:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang)
-            if t_info:
-                item["vod_flatrate"] = t_info.get("vod_flatrate", [])
-                item["vod_providers"] = t_info.get("vod_providers", [])
-        enrich_movie_with_user_vod(item, my_subs)
-        return item
-
-    with ThreadPoolExecutor(max_workers=min(len(filtered["items"]), 8)) as executor:
-        filtered["items"] = list(executor.map(_enrich_cat_item, filtered["items"]))
+    filtered["items"] = attach_vod_parallel(filtered["items"], lang, my_subs)
 
     for item in filtered["items"]:
         prepare_movie_item(item, lang=lang)
@@ -618,52 +563,41 @@ def roulette_spin_partial(request):
 
     exclude_ids = list(watched_ids) if exclude_watched else []
 
+    def _filter_on_target_vod(ids) -> list:
+        """Keep the ids available on the chosen platforms (cached lookups, run in parallel)."""
+        ids = list(ids)
+        if not ids:
+            return []
+
+        def _is_on_target(mid) -> bool:
+            info = tmdb.fetch_vod_info(mid, lang=lang)
+            provs = info.get("vod_flatrate", []) if only_subs else info.get("vod_providers", [])
+            return any(p.get("id") in target_pids for p in provs)
+
+        with ThreadPoolExecutor(max_workers=min(len(ids), 8)) as executor:
+            return [mid for mid, ok in zip(ids, executor.map(_is_on_target, ids)) if ok]
+
     candidate_ids = None
     if source == "watchlist":
         candidate_ids = list(watchlist_ids)
     elif source == "watchlist_vod":
-        vod_cands = []
-        for mid in watchlist_ids:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang)
-            if t_info:
-                provs = t_info.get("vod_flatrate", []) if only_subs else t_info.get("vod_providers", [])
-                if any(p.get("id") in target_pids for p in provs):
-                    vod_cands.append(mid)
-        candidate_ids = vod_cands
+        candidate_ids = _filter_on_target_vod(watchlist_ids)
     elif source == "my_vod":
         # First gather candidates from watchlist matching subscriptions
-        vod_cands = []
-        for mid in watchlist_ids:
-            t_info = tmdb.fetch_movie_details(mid, lang=lang)
-            if t_info:
-                provs = t_info.get("vod_flatrate", []) if only_subs else t_info.get("vod_providers", [])
-                if any(p.get("id") in target_pids for p in provs):
-                    vod_cands.append(mid)
+        vod_cands = _filter_on_target_vod(watchlist_ids)
         # Supplement from trending / top movies available on user's VOD
         if len(vod_cands) < 15:
             trending = services.get_trending_content(category="movies", lang=lang)
-            for item in trending:
-                mid = item.get("movie_id")
-                if mid and mid not in vod_cands:
-                    t_info = tmdb.fetch_movie_details(mid, lang=lang)
-                    if t_info:
-                        provs = t_info.get("vod_flatrate", []) if only_subs else t_info.get("vod_providers", [])
-                        if any(p.get("id") in target_pids for p in provs):
-                            vod_cands.append(mid)
+            vod_cands += _filter_on_target_vod(
+                i["movie_id"] for i in trending if i.get("movie_id") and i["movie_id"] not in vod_cands
+            )
         # Also check top rated movies from local dataset if needed
         if len(vod_cands) < 15:
             top_movies = services.filter_movies(genre="All", sort_by="vote_desc", per_page=40, lang=lang).get("items", [])
-            for item in top_movies:
-                mid = item.get("movie_id")
-                if mid and mid not in vod_cands:
-                    t_info = tmdb.fetch_movie_details(mid, lang=lang)
-                    if t_info:
-                        provs = t_info.get("vod_flatrate", []) if only_subs else t_info.get("vod_providers", [])
-                        if any(p.get("id") in target_pids for p in provs):
-                            vod_cands.append(mid)
-                            if len(vod_cands) >= 20:
-                                break
-        candidate_ids = list(set(vod_cands))
+            vod_cands += _filter_on_target_vod(
+                i["movie_id"] for i in top_movies if i.get("movie_id") and i["movie_id"] not in vod_cands
+            )
+        candidate_ids = list(dict.fromkeys(vod_cands))[:30]
 
     if candidate_ids is not None and not candidate_ids:
         winner, teaser_pool = None, []
@@ -846,9 +780,7 @@ def get_watchlist_data(request) -> dict:
     need_vod_enrichment = [mid for mid in parsed_ids if mid in resolved_movies and "vod_flatrate" not in resolved_movies[mid]]
     if need_vod_enrichment:
         def _fetch_vod(mid: int):
-            t_info = tmdb.fetch_movie_details(mid, lang=lang)
-            if not t_info:
-                return mid, [], [], [], [], None
+            t_info = tmdb.fetch_vod_info(mid, lang=lang, title=resolved_movies[mid].get("title") or "")
             return (
                 mid,
                 t_info.get("vod_flatrate", []),

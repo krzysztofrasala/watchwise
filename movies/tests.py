@@ -49,6 +49,43 @@ class MoviesViewTestCase(TestCase):
         self.assertEqual(result["year_min"], 1990)
         self.assertEqual(result["year_max"], 1999)
 
+    def test_nl_query_multilingual(self):
+        parse = nl_query.parse_natural_query_regex
+        cases = [
+            # (query, genre, year_min, year_max, language)
+            ("mroczny thriller z lat 90", "Thriller", 1990, 1999, None),
+            ("smieszna komedia francuska", "Comedy", None, None, "fr"),  # no diacritics
+            ("polskie dramaty od 1990 do 2000", "Drama", 1990, 2000, "pl"),
+            ("dark 90s psychological thriller", "Thriller", 1990, 1999, None),
+            ("romantic comedy from the 80s", "Romance", 1980, 1989, None),
+            ("düsterer Thriller aus den 90er", "Thriller", 1990, 1999, None),
+            ("beste deutsche Komödien", "Comedy", None, None, "de"),
+            ("película de terror de los años 80", "Horror", 1980, 1989, None),
+            ("thriller oscuro anni '90 italiano", "Thriller", 1990, 1999, "it"),
+            ("comédie française des années 80", "Comedy", 1980, 1989, "fr"),
+            ("horror z 1995", "Horror", 1995, 1995, None),
+            ("Horrorfilm seit 2015", "Horror", 2015, None, None),
+        ]
+        for query, genre, y_min, y_max, language in cases:
+            with self.subTest(query=query):
+                r = parse(query)
+                self.assertEqual(r["genre"], genre)
+                self.assertEqual(r["year_min"], y_min)
+                self.assertEqual(r["year_max"], y_max)
+                self.assertEqual(r["language"], language)
+
+        # "10" in "top 10" must not be read as the 2010s
+        r = parse("top 10 filmow")
+        self.assertIsNone(r["year_min"])
+        self.assertEqual(r["vote_min"], 8.0)
+        # Runtime is not a rating
+        self.assertIsNone(parse("film ponad 2 godziny")["vote_min"])
+        self.assertEqual(parse("movies rated above 8")["vote_min"], 8.0)
+        # Recent / classic / unknown input
+        self.assertEqual(parse("newest action movies")["sort_by"], "year_desc")
+        self.assertEqual(parse("klasyka sci-fi")["year_max"], 1999)
+        self.assertFalse(parse("hello world")["understood"])
+
     def test_profiles_management(self):
         session = {}
         active = profiles.get_active_profile_name(session)
