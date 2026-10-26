@@ -88,7 +88,7 @@
                         placeholder="{{ 'search_placeholder'|t:current_lang }}" 
                         class="w-full bg-white/10 border border-white/15 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all"
                         hx-get="{% url 'search_live_partial' %}"
-                        hx-trigger="keyup changed delay:300ms"
+                        hx-trigger="keyup changed delay:300ms" hx-sync="this:replace"
                         hx-target="#search-results-dropdown-mobile"
                     >
                     <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5"></i>
@@ -150,7 +150,7 @@
                             placeholder="{{ 'search_placeholder'|t:current_lang }}" 
                             class="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all"
                             hx-get="{% url 'search_live_partial' %}"
-                            hx-trigger="keyup changed delay:300ms"
+                            hx-trigger="keyup changed delay:300ms" hx-sync="this:replace"
                             hx-target="#search-results-dropdown"
                         >
                         <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5"></i>
