@@ -35,6 +35,49 @@
         </div>
     </div>
 
+    <!-- Mode Switcher: Vibes vs Compare 2 Profiles -->
+    <div class="flex items-center justify-center gap-3">
+        <a href="{% url 'compare' %}?mode=vibes" class="px-5 py-2.5 rounded-2xl text-xs font-extrabold border transition-all {% if compare_mode != 'profiles' %}bg-amber-400 text-black border-amber-400 shadow-lg shadow-amber-400/20{% else %}bg-white/5 text-gray-300 border-white/10 hover:text-white{% endif %}">
+            {{ "mode_vibes"|t:current_lang }}
+        </a>
+        <a href="{% url 'compare' %}?mode=profiles&p1={{ p1 }}&p2={{ p2 }}" class="px-5 py-2.5 rounded-2xl text-xs font-extrabold border transition-all {% if compare_mode == 'profiles' %}bg-amber-400 text-black border-amber-400 shadow-lg shadow-amber-400/20{% else %}bg-white/5 text-gray-300 border-white/10 hover:text-white{% endif %}">
+            {{ "mode_profiles"|t:current_lang }}
+        </a>
+    </div>
+
+    {% if compare_mode == 'profiles' %}
+    <!-- Dual Profile Comparison Bar -->
+    <form method="GET" action="{% url 'compare' %}" class="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-4 shadow-xl">
+        <input type="hidden" name="mode" value="profiles">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1.5 bg-white/5 p-4 rounded-2xl border border-white/5">
+                <label class="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span class="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[10px] text-amber-400">1</span>
+                    {{ "profile_1_select"|t:current_lang }}
+                </label>
+                <select name="p1" onchange="this.form.submit()" class="w-full bg-gray-900 border border-white/10 text-sm text-white font-bold rounded-xl px-3.5 py-2.5 focus:border-amber-400 focus:outline-none">
+                    {% for prof in all_profiles_display %}
+                    <option value="{{ prof.raw }}" {% if p1 == prof.raw %}selected{% endif %}>👤 {{ prof.display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="space-y-1.5 bg-white/5 p-4 rounded-2xl border border-white/5">
+                <label class="text-xs font-extrabold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span class="w-5 h-5 rounded-full bg-pink-500/20 flex items-center justify-center text-[10px] text-pink-400">2</span>
+                    {{ "profile_2_select"|t:current_lang }}
+                </label>
+                <select name="p2" onchange="this.form.submit()" class="w-full bg-gray-900 border border-white/10 text-sm text-white font-bold rounded-xl px-3.5 py-2.5 focus:border-pink-400 focus:outline-none">
+                    {% for prof in all_profiles_display %}
+                    <option value="{{ prof.raw }}" {% if p2 == prof.raw %}selected{% endif %}>👤 {{ prof.display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="w-full bg-amber-400 hover:bg-amber-500 text-black font-black py-3 rounded-2xl text-sm transition-all shadow-lg shadow-amber-400/20 flex items-center justify-center gap-2">
+            <i data-lucide="users" class="w-4 h-4"></i> {{ "compare_profiles_btn"|t:current_lang }}
+        </button>
+    </form>
+    {% else %}
     <!-- Dual Vibe Selection Bar -->
     <form method="GET" action="{% url 'compare' %}" class="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-4 shadow-xl">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -73,13 +116,18 @@
             <i data-lucide="sparkles" class="w-4 h-4 fill-black"></i> {{ "calculate_compromise"|t:current_lang }}
         </button>
     </form>
+    {% endif %}
 
     <!-- Dynamic Match Compatibility Bar -->
     <div class="glass-panel p-6 rounded-3xl border border-white/10 space-y-3">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <span class="text-xl">🤝</span>
+                {% if compare_mode == 'profiles' %}
+                <span class="font-bold text-sm text-white">{{ "harmony_match"|t:current_lang }} <span class="text-amber-400 font-extrabold">👤 {{ p1_display }}</span> + <span class="text-pink-400 font-extrabold">👤 {{ p2_display }}</span></span>
+                {% else %}
                 <span class="font-bold text-sm text-white">{{ "harmony_match"|t:current_lang }} <span class="text-amber-400 font-extrabold">{{ vibe1 }}</span> + <span class="text-pink-400 font-extrabold">{{ vibe2 }}</span></span>
+                {% endif %}
             </div>
             <span class="text-xl font-black text-amber-400">{{ harmony_score }}% Match</span>
         </div>
@@ -102,7 +150,7 @@
                  hx-target="#movie-modal-container">
                 
                 <div class="relative aspect-[2/3] overflow-hidden bg-gray-900">
-                    <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    <img loading="lazy" decoding="async" src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20 opacity-80 group-hover:opacity-60 transition-opacity"></div>
                     
                     <div class="absolute top-2 left-2 bg-amber-400 text-black font-extrabold text-[11px] px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1">

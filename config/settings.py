@@ -62,12 +62,63 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+def _parse_database_url(url: str) -> dict:
+    """Parse DATABASE_URL environment variable for PostgreSQL / SQLite without external dependencies."""
+    from urllib.parse import urlparse, parse_qs, unquote
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or '').lower()
+    if scheme in ('postgres', 'postgresql', 'pgsql'):
+        cfg = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': unquote(parsed.path.lstrip('/')),
+            'USER': unquote(parsed.username or ''),
+            'PASSWORD': unquote(parsed.password or ''),
+            'HOST': parsed.hostname or 'localhost',
+            'PORT': str(parsed.port or 5432),
+            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '600')),
+        }
+        qs = parse_qs(parsed.query)
+        options = {}
+        if 'sslmode' in qs and qs['sslmode']:
+            options['sslmode'] = qs['sslmode'][0]
+        if options:
+            cfg['OPTIONS'] = options
+        return cfg
+    if scheme == 'sqlite':
+        db_path = unquote(parsed.path)
+        if db_path in ('', '/', ':memory:'):
+            name = ':memory:'
+        else:
+            name = db_path.lstrip('/') if not db_path.startswith('//') else db_path[1:]
+        return {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': name,
+        }
+    return {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+
+
+_database_url = os.environ.get('DATABASE_URL', '').strip()
 DATABASES = {
-    'default': {
+    'default': _parse_database_url(_database_url) if _database_url else {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 365  # 1 year session persistence
+
+if not DEBUG:
+    # Production hardening (Render terminates TLS and forwards X-Forwarded-Proto)
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SSL_REDIRECT', 'True').lower() in ('true', '1')
+    SECURE_REDIRECT_EXEMPT = [r'^healthz/?$']
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '3600'))
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 AUTH_PASSWORD_VALIDATORS = []
 

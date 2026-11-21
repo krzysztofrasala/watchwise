@@ -28,8 +28,8 @@
     <!-- Pre-built Minified Tailwind & Design System CSS -->
     <link rel="stylesheet" href="{% static 'css/main.css' %}">
     
-    <!-- HTMX CDN -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- HTMX (self-hosted, pinned 1.9.10) -->
+    <script src="{% static 'vendor/htmx-1.9.10.min.js' %}"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -138,6 +138,20 @@
                                 {% endfor %}
                             </select>
                         </form>
+                        <button type="button" onclick="document.getElementById('desktop-new-profile-form').classList.toggle('hidden')" title="{{ 'create_profile_btn'|t:current_lang }}" class="w-6 h-6 rounded-lg bg-white/10 hover:bg-brand-gold hover:text-black text-gray-300 flex items-center justify-center border border-white/10 text-xs font-bold transition-colors">+</button>
+                        <form id="desktop-new-profile-form" action="{% url 'create_profile' %}" method="POST" class="hidden flex items-center gap-1">
+                            {% csrf_token %}
+                            <input type="text" name="new_profile_name" maxlength="30" required placeholder="{{ 'new_profile_placeholder'|t:current_lang }}" class="w-28 bg-black/70 border border-white/15 rounded-lg px-2 py-1 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-brand-gold">
+                            <button type="submit" class="px-2 py-1 rounded-lg bg-brand-gold text-black text-xs font-bold hover:bg-yellow-400 transition-colors">+</button>
+                        </form>
+                        {% if active_profile != "Główny" %}
+                        <form action="{% url 'delete_profile' %}" method="POST" class="inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="profile_name" value="{{ active_profile }}">
+                            <button type="submit" title="{{ 'delete_profile_btn'|t:current_lang }}" class="w-6 h-6 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-red-400 flex items-center justify-center border border-red-500/20 text-xs font-bold transition-colors">×</button>
+                        </form>
+                        {% endif %}
+
                     </div>
                 </div>
 
@@ -282,6 +296,14 @@
                                 </option>
                             {% endfor %}
                         </select>
+                    </form>
+                    <!-- Create New Profile Form -->
+                    <form action="{% url 'create_profile' %}" method="POST" class="flex items-center gap-1.5 pt-1">
+                        {% csrf_token %}
+                        <input type="text" name="new_profile_name" maxlength="30" required placeholder="{{ 'new_profile_placeholder'|t:current_lang }}" class="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold">
+                        <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-brand-gold/20 hover:bg-brand-gold text-brand-gold hover:text-black border border-brand-gold/30 text-xs font-bold transition-colors shrink-0">
+                            {{ "create_profile_btn"|t:current_lang }}
+                        </button>
                     </form>
                 </div>
 

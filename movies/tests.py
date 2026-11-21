@@ -504,7 +504,127 @@ class MoviesViewTestCase(TestCase):
         self.assertContains(res, 'icons/favicon')
         self.assertContains(res, 'pwa-install-btn-mobile')
 
+    def test_toggle_watched_from_watchlist_card_returns_html(self):
+        self.client.post(reverse('toggle_watchlist', args=[278]))
+        res = self.client.post(
+            reverse('toggle_watched', args=[278]) + '?tab=watchlist&vod=all',
+            HTTP_HX_REQUEST='true',
+            HTTP_HX_TARGET='watchlist-grid-container',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'id="watchlist-grid-container"')
+        self.assertIn('watchedChanged', res.headers.get('HX-Trigger', ''))
+
+    def test_search_movies_by_actor_tags(self):
+        results = services.search_movies("Kento Yamazaki", limit=5)
+        self.assertGreater(len(results), 0)
+
+    def test_taste_profile_low_ratings_and_watched_ids(self):
+        low_only = taste.compute_taste_profile({278: 1}, [])
+        self.assertEqual(low_only["genre_values"], [])
+        with_watched = taste.compute_taste_profile({}, [], watched_ids=[278])
+        self.assertGreater(len(with_watched["genre_labels"]), 0)
+
+    def test_compare_vibe_matchmaker_with_populated_watchlist(self):
+        self.client.post(reverse('toggle_watchlist', args=[278]))
+        res = self.client.get(reverse('compare') + '?preset=couple')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.context['vibe1'], 'Action')
+        self.assertEqual(res.context['vibe2'], 'Romance')
+        self.assertGreater(len(res.context['recommendations']), 0)
+        self.assertIn('Action & Romance', res.context['recommendations'][0].get('match_reason', ''))
+
+    def test_profile_export_and_import(self):
+        self.client.post(reverse('toggle_watchlist', args=[278]))
+        export_res = self.client.get(reverse('export_profile'))
+        self.assertEqual(export_res.status_code, 200)
+        payload = json.loads(export_res.content.decode('utf-8'))
+        self.assertIn('profiles', payload)
+        self.assertIn(278, payload['profiles']['Główny']['watchlist'])
+
+    def test_sparse_vectors_loaded_and_recommend_for_user_returns_results(self):
+        movies_df, vectors, is_dense = services.load_dataset_with_vectors()
+        self.assertIsNotNone(vectors)
+        self.assertFalse(is_dense)
+        recs = recommender.recommend_for_user({278: 5}, [], top_n=5)
+        self.assertEqual(len(recs), 5)
+        self.assertNotIn(278, [r['movie_id'] for r in recs])
+
+    def test_database_url_parsing(self):
+        from config.settings import _parse_database_url
+
+        pg_cfg = _parse_database_url('postgresql://dbuser:dbpass@db.neon.tech:5432/cinescope?sslmode=require')
+        self.assertEqual(pg_cfg['ENGINE'], 'django.db.backends.postgresql')
+        self.assertEqual(pg_cfg['NAME'], 'cinescope')
+        self.assertEqual(pg_cfg['USER'], 'dbuser')
+        self.assertEqual(pg_cfg['HOST'], 'db.neon.tech')
+        self.assertEqual(pg_cfg['OPTIONS']['sslmode'], 'require')
+
+    def test_compare_two_profiles_mode(self):
+        # Populate Główny and create second profile Anna
+        self.client.post(reverse('toggle_watchlist', args=[278]))
+        self.client.post(reverse('create_profile'), {'new_profile_name': 'Anna'})
+        self.client.post(reverse('toggle_watchlist', args=[19995]))
+
+        res = self.client.get(reverse('compare') + '?mode=profiles&p1=Główny&p2=Anna')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.context['compare_mode'], 'profiles')
+        self.assertGreater(len(res.context['recommendations']), 0)
+        self.assertContains(res, 'Anna')
+
+    def test_discover_pro_vod_and_runtime_filters(self):
+        res = self.client.get(reverse('discover') + '?genre=Drama&max_runtime=120&year_min=1990&sort_by=year_desc')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.context['selected_runtime'], '120')
+        for m in res.context['movies']:
+            self.assertLessEqual(m['runtime'], 120)
+            self.assertGreaterEqual(m['year'], 1990)
+
+    def test_taste_dna_critic_style_and_hall_of_fame(self):
+        self.client.post(
+            reverse('rate_movie', args=[278]),
+            data=json.dumps({'stars': 5}),
+            content_type='application/json',
+        )
+        self.client.post(reverse('toggle_watched', args=[19995]))
+        res = self.client.get(reverse('taste_dna'))
+        self.assertEqual(res.status_code, 200)
+        td = res.context['taste_data']
+        self.assertGreaterEqual(td['total_watched'], 2)
+        self.assertGreater(td['avg_runtime'], 0)
+        self.assertEqual(len(td['top_rated_movies']), 1)
+        self.assertEqual(td['top_rated_movies'][0]['movie_id'], 278)
 
 
 
 
+
+
+
+
+
+class HardeningTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_assistant_rate_limit(self):
+        from . import views
+        for _ in range(views.ASSISTANT_RATE_LIMIT):
+            res = self.client.post("/assistant/chat/", {"message": "   "})
+            self.assertEqual(res.status_code, 400)  # empty message, not counted
+        # exhaust the counter directly, then the next real request is refused
+        from django.core.cache import cache
+        cache.set("rl:assistant:127.0.0.1", views.ASSISTANT_RATE_LIMIT, 3600)
+        res = self.client.post("/assistant/chat/", {"message": "komedia"})
+        self.assertEqual(res.status_code, 429)
+
+    def test_import_rejects_oversized_file(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from . import views
+        big = SimpleUploadedFile("p.json", b"x" * (views.IMPORT_MAX_BYTES + 1))
+        res = self.client.post("/profile/import/", {"profile_file": big})
+        self.assertEqual(res.status_code, 413)
+
+    def test_bad_page_param_does_not_500(self):
+        self.assertEqual(self.client.get("/discover/?page=abc").status_code, 200)

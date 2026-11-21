@@ -1,15 +1,17 @@
 from __future__ import annotations
 import os
+import hashlib
 import json
 import re
 import html
 import base64
 import subprocess
 import sys
+import time
 import logging
 import urllib.parse
 from urllib.parse import quote, unquote
-from functools import lru_cache
+from functools import wraps
 import requests
 from django.core.cache import cache
 from requests.adapters import HTTPAdapter
@@ -44,14 +46,39 @@ def get_session() -> requests.Session:
 
 VOD_CACHE_TTL = 60 * 60 * 6  # provider availability changes slowly
 DETAILS_CACHE_TTL = 60 * 60 * 6
+LIST_CACHE_TTL = 60 * 20  # trending/upcoming/search lists: fresh enough, saves TMDB round trips
+
+
+def _ttl_cached(ttl: int):
+    """Cache a list-returning function in the Django cache; empty results (failures) are never stored."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            raw = f"{func.__name__}|{args}|{sorted(kwargs.items())}"
+            key = "tmdblist_" + hashlib.md5(raw.encode('utf-8')).hexdigest()
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            result = func(*args, **kwargs)
+            if result:
+                cache.set(key, result, ttl)
+            return result
+        return wrapper
+    return decorator
+
+
+_tmdb_unreachable_until: float = 0.0
+_CIRCUIT_BREAKER_SECONDS = 15.0
 
 
 def _tmdb_get_curl(url: str, params: dict, timeout: int) -> dict | None:
     query_str = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
     full_url = f"{url}?{query_str}"
     try:
+        # Pass URL via stdin (--config -) so api_key is not exposed in process table (ps aux)
         proc = subprocess.run(
-            ["curl", "-s", "--max-time", str(timeout), full_url],
+            ["curl", "-s", "--max-time", str(timeout), "--config", "-"],
+            input=f'url = "{full_url}"\n',
             capture_output=True,
             text=True,
             timeout=timeout + 1
@@ -79,24 +106,35 @@ def _tmdb_get_requests(url: str, params: dict, timeout: int) -> dict | None:
 
 
 def _tmdb_get(url: str, params: dict, timeout: int = 4) -> dict | None:
-    """Execute a TMDB request.
+    """Execute a TMDB request with a short circuit breaker for offline/unreachable states.
 
     curl goes first on macOS to avoid LibreSSL TLS renegotiation hangs; everywhere else the pooled
     requests session is much cheaper than forking a process per call.
     """
+    global _tmdb_unreachable_until
+    if time.monotonic() < _tmdb_unreachable_until:
+        return None
+
     attempts = (_tmdb_get_curl, _tmdb_get_requests) if sys.platform == "darwin" else (_tmdb_get_requests, _tmdb_get_curl)
     for attempt in attempts:
         data = attempt(url, params, timeout)
         if data is not None:
+            _tmdb_unreachable_until = 0.0
             return data
+
+    _tmdb_unreachable_until = time.monotonic() + _CIRCUIT_BREAKER_SECONDS
     return None
 
 
 def _http_get_text(url: str, timeout: int = 8) -> str:
     """Fetch a page as text (same macOS/curl vs requests policy as _tmdb_get)."""
+    if time.monotonic() < _tmdb_unreachable_until:
+        return ""
+
     def _curl() -> str:
         proc = subprocess.run(
-            ["curl", "--compressed", "-s", "--connect-timeout", "4", "-m", str(timeout), url],
+            ["curl", "--compressed", "-s", "--connect-timeout", "4", "-m", str(timeout), "--config", "-"],
+            input=f'url = "{url}"\n',
             capture_output=True,
             text=True
         )
@@ -148,7 +186,7 @@ def get_supported_vod_services() -> list[dict]:
 def get_api_key() -> str:
     return os.getenv("TMDB_API_KEY", "").strip()
 
-def get_poster_url(poster_path: str | None, size: str = "w500") -> str:
+def get_poster_url(poster_path: str | None, size: str = "w342") -> str:
     if not poster_path:
         return DEFAULT_POSTER
     if poster_path.startswith("http"):
@@ -248,7 +286,7 @@ def get_direct_provider_links(watch_url: str) -> dict:
     """Exact provider deep links for a TMDB watch page, cached only when the lookup succeeded."""
     if not watch_url:
         return {}
-    key = f"directlinks_{abs(hash(watch_url))}"
+    key = f"directlinks_{hashlib.md5(watch_url.encode('utf-8')).hexdigest()}"
     cached = cache.get(key)
     if cached is not None:
         return cached
@@ -351,7 +389,10 @@ OFFLINE_VOD_DATA = {
             ],
         },
         "PL": {
-            "flatrate": [{"id": 1899, "name": "Max", "logo_path": "/jse515m3uB8g4t3zS7d0A1b9.jpg"}],
+            "flatrate": [
+                {"id": 1899, "name": "Max", "logo_path": "/jse515m3uB8g4t3zS7d0A1b9.jpg"},
+                {"id": 505, "name": "Player", "logo_path": "/8mtdz2Y3NW5NfiSZiBFhngFSy3S.png"},
+            ],
             "rent": [
                 {"id": 350, "name": "Apple TV", "logo_path": "/2E03pXt88mPuvE2M97w6J4lA1.jpg"},
                 {"id": 119, "name": "Prime Video", "logo_path": "/p5117uVzD6nF14l4lKkE4o25X8k.jpg"},
@@ -388,7 +429,10 @@ OFFLINE_VOD_DATA = {
             "buy": [{"id": 350, "name": "Apple TV", "logo_path": "/2E03pXt88mPuvE2M97w6J4lA1.jpg"}],
         },
         "PL": {
-            "flatrate": [{"id": 1899, "name": "Max", "logo_path": "/jse515m3uB8g4t3zS7d0A1b9.jpg"}],
+            "flatrate": [
+                {"id": 1899, "name": "Max", "logo_path": "/jse515m3uB8g4t3zS7d0A1b9.jpg"},
+                {"id": 505, "name": "Player", "logo_path": "/8mtdz2Y3NW5NfiSZiBFhngFSy3S.png"},
+            ],
             "rent": [{"id": 350, "name": "Apple TV", "logo_path": "/2E03pXt88mPuvE2M97w6J4lA1.jpg"}, {"id": 119, "name": "Prime Video", "logo_path": "/p5117uVzD6nF14l4lKkE4o25X8k.jpg"}],
             "buy": [{"id": 350, "name": "Apple TV", "logo_path": "/2E03pXt88mPuvE2M97w6J4lA1.jpg"}],
         },
@@ -676,7 +720,7 @@ def _fetch_movie_details_uncached(movie_id: int, lang: str = "PL", media_type: s
             return res_dict
     except Exception:
         pass
-    return None
+    return get_offline_vod(movie_id, lang=lang)
 
 
 def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None) -> dict | None:
@@ -686,7 +730,7 @@ def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None)
     if cached is not None:
         return cached
     details = _fetch_movie_details_uncached(movie_id, lang=lang, media_type=media_type)
-    if details:  # never cache failures
+    if details and details.get("title"):  # only cache full TMDB details, not transient offline fallbacks
         cache.set(key, details, DETAILS_CACHE_TTL)
     return details
 
@@ -747,6 +791,7 @@ def fetch_vod_info(movie_id: int, lang: str = "PL", media_type: str = None, titl
     return info
 
 
+@_ttl_cached(LIST_CACHE_TTL)
 def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict]:
     """Search movies and TV series via TMDB multi search API."""
     if not query or len(query.strip()) < 2:
@@ -776,19 +821,19 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
         if res_data and "results" in res_data:
             results = res_data.get("results", [])
             items = []
-            for item in results:
-                m_type = item.get("media_type")
+            seen_ids = set()
+
+            def _append_media_item(entry: dict) -> None:
+                m_type = entry.get("media_type")
                 if m_type not in ["movie", "tv"]:
-                    continue
-
-                movie_id = item.get("id")
-                title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name")
-                if not title:
-                    continue
-
-                date_str = item.get("release_date") or item.get("first_air_date") or ""
+                    return
+                movie_id = entry.get("id")
+                title = entry.get("title") or entry.get("name") or entry.get("original_title") or entry.get("original_name")
+                if not title or not movie_id or movie_id in seen_ids:
+                    return
+                seen_ids.add(movie_id)
+                date_str = entry.get("release_date") or entry.get("first_air_date") or ""
                 year = int(date_str[:4]) if date_str[:4].isdigit() else None
-
                 items.append({
                     "movie_id": movie_id,
                     "title": title,
@@ -796,11 +841,21 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
                     "is_tv": (m_type == "tv"),
                     "media_badge": f"📺 {i18n.t('badge_tv', lang)}" if m_type == "tv" else f"🎬 {i18n.t('badge_movie', lang)}",
                     "year": year,
-                    "poster_url": get_poster_url(item.get("poster_path")),
-                    "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
-                    "vote_average": round(float(item.get("vote_average", 0.0)), 1),
-                    "overview": item.get("overview", ""),
+                    "poster_url": get_poster_url(entry.get("poster_path")),
+                    "backdrop_url": get_backdrop_url(entry.get("backdrop_path")),
+                    "vote_average": round(float(entry.get("vote_average", 0.0)), 1),
+                    "overview": entry.get("overview", ""),
                 })
+
+            for item in results:
+                m_type = item.get("media_type")
+                if m_type in ["movie", "tv"]:
+                    _append_media_item(item)
+                elif m_type == "person":
+                    for kf in item.get("known_for", []):
+                        _append_media_item(kf)
+                        if len(items) >= limit:
+                            break
                 if len(items) >= limit:
                     break
             return items
@@ -809,7 +864,7 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
     return []
 
 
-@lru_cache(maxsize=50)
+@_ttl_cached(LIST_CACHE_TTL)
 def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch trending movies or TV series from TMDB API."""
     api_key = get_api_key()
@@ -868,7 +923,7 @@ def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: st
     return []
 
 
-@lru_cache(maxsize=50)
+@_ttl_cached(LIST_CACHE_TTL)
 def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch upcoming movies from TMDB API."""
     api_key = get_api_key()

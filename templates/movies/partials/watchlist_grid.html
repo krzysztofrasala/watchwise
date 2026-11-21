@@ -210,7 +210,7 @@
                 {% if my_subscriptions_count == 0 %}
                 {{ "no_vod_subs_prompt"|t:current_lang }}
                 {% else %}
-                Żaden z filmów z tej listy nie jest aktualnie dostępny w abonamencie na Twoich platformach.
+                {{ "no_movies_on_my_vod"|t:current_lang }}
                 {% endif %}
             </p>
             {% if my_subscriptions_count == 0 %}

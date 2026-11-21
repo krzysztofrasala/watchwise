@@ -1,4 +1,4 @@
-const CACHE_NAME = 'watchwise-cache-v1';
+const CACHE_NAME = 'watchwise-cache-v2';
 const OFFLINE_URL = '/offline/';
 
 // Critical assets to pre-cache on install
@@ -10,7 +10,7 @@ const PRECACHE_ASSETS = [
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/apple-touch-icon.png',
-  'https://unpkg.com/htmx.org@1.9.10',
+  '/static/vendor/htmx-1.9.10.min.js',
   'https://unpkg.com/lucide@latest',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap'
 ];

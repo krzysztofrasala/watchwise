@@ -7,7 +7,7 @@
 >
     <!-- Poster Image -->
     <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
-        <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+        <img loading="lazy" decoding="async" src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
         
         <!-- Rating Badge -->
         <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[11px] font-extrabold px-2 py-0.5 rounded-md border border-brand-gold/30 flex items-center gap-1 shadow-md z-10">
@@ -25,7 +25,7 @@
         <div class="absolute top-2 left-2 z-20" onclick="event.stopPropagation()">
             <button 
                 type="button"
-                hx-post="{% url 'toggle_watched' movie.movie_id %}"
+                hx-post="{% url 'toggle_watched' movie.movie_id %}?tab={{ tab|default:'watchlist' }}&vod={{ vod_filter|default:'all' }}&only_subs={% if only_subs %}1{% else %}0{% endif %}&view_mode={{ view_mode|default:'grid' }}"
                 hx-target="#watchlist-grid-container"
                 hx-swap="outerHTML"
                 title="{% if movie.is_watched %}{{ 'marked_as_watched'|t:current_lang }}{% else %}{{ 'mark_as_watched'|t:current_lang }}{% endif %}"

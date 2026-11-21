@@ -65,14 +65,10 @@ def recommend_for_user(
 
         vec = vectors[idx]
         if is_dense:
-            norm = np.linalg.norm(vec)
-            vec_norm = vec / norm if norm > 0 else vec
-            user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
+            vec_norm = vec
         else:
-            vec_dense = vec.toarray().ravel()
-            norm = np.linalg.norm(vec_dense)
-            vec_norm = vec_dense / norm if norm > 0 else vec_dense
-            user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
+            vec_norm = vec.toarray().ravel()
+        user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
 
     # 2. Process watchlist items (weight 0.5)
     for mid in watchlist_ids:
@@ -90,13 +86,34 @@ def recommend_for_user(
 
         vec = vectors[idx]
         if is_dense:
-            norm = np.linalg.norm(vec)
-            vec_norm = vec / norm if norm > 0 else vec
-            user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
+            vec_norm = vec
         else:
-            vec_dense = vec.toarray().ravel()
-            norm = np.linalg.norm(vec_dense)
-            vec_norm = vec_dense / norm if norm > 0 else vec_dense
+            vec_norm = vec.toarray().ravel()
+        user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
+
+    # 3. Process unrated watched items (weight 0.6) so watched history also informs taste vector
+    if watched_ids:
+        for mid in watched_ids:
+            try:
+                mid = int(mid)
+            except (ValueError, TypeError):
+                continue
+            if mid not in id_to_idx or mid in user_ratings or mid in watchlist_ids:
+                continue
+            idx = id_to_idx[mid]
+            seen_indices.add(idx)
+
+            weight = 0.6
+            row = movies_df.iloc[idx]
+            genres = row.get("genres_list", [])
+            if isinstance(genres, list):
+                user_top_genres.update(genres)
+
+            vec = vectors[idx]
+            if is_dense:
+                vec_norm = vec
+            else:
+                vec_norm = vec.toarray().ravel()
             user_vector = (weight * vec_norm) if user_vector is None else (user_vector + weight * vec_norm)
 
     if user_vector is None:
@@ -107,16 +124,12 @@ def recommend_for_user(
     if u_norm > 0:
         user_vector /= u_norm
 
-    # Compute similarity between user_vector and all movie vectors
+    # Since movie vectors are pre-normalized to unit L2 norm in load_dataset_with_vectors,
+    # cosine similarity is simply the dot product:
     if is_dense:
-        vec_norms = np.linalg.norm(vectors, axis=1)
-        vec_norms[vec_norms == 0] = 1.0
-        sim_scores = np.dot(vectors, user_vector) / vec_norms
+        sim_scores = np.dot(vectors, user_vector)
     else:
-        sim_scores = vectors.dot(user_vector)
-        row_norms = np.sqrt(vectors.multiply(vectors).sum(axis=1)).A1
-        row_norms[row_norms == 0] = 1.0
-        sim_scores = sim_scores / row_norms
+        sim_scores = np.asarray(vectors.dot(user_vector)).ravel()
 
     # Exclude already seen/rated movies
     for idx in seen_indices:
@@ -177,12 +190,15 @@ def recommend_for_group(
     user2_ratings: dict[int, int],
     user2_watchlist: list[int],
     top_n: int = TOP_N,
-    lang: str = "PL"
+    lang: str = "PL",
+    user1_watched: list[int] = None,
+    user2_watched: list[int] = None,
 ) -> list[dict[str, Any]]:
     """Compute joint recommendation matching tastes of two users/profiles."""
     code = lang.upper().strip()
-    recs1 = recommend_for_user(user1_ratings, user1_watchlist, top_n=50, lang=lang)
-    recs2 = recommend_for_user(user2_ratings, user2_watchlist, top_n=50, lang=lang)
+    joint_watched = list(dict.fromkeys((user1_watched or []) + (user2_watched or [])))
+    recs1 = recommend_for_user(user1_ratings, user1_watchlist, top_n=50, lang=lang, watched_ids=joint_watched or user1_watched)
+    recs2 = recommend_for_user(user2_ratings, user2_watchlist, top_n=50, lang=lang, watched_ids=joint_watched or user2_watched)
 
     if not recs1 and not recs2:
         return []

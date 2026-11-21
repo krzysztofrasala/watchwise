@@ -300,7 +300,10 @@ def movie_grid_partial(request):
     year_max = request.GET.get("year_max")
     vote_min = request.GET.get("vote_min")
     sort_by = request.GET.get("sort_by", "vote_desc")
-    page = int(request.GET.get("page", 1))
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
     vod_filter = request.GET.get("vod", "all").strip()
 
     ratings = profiles.get_active_ratings(request.session)
@@ -965,11 +968,12 @@ def set_vod_subscriptions_view(request):
         current_url = request.headers.get("HX-Current-URL", "") or request.META.get("HTTP_REFERER", "")
         if "/watchlist" in current_url:
             ctx = get_base_context(request)
+            lang = ctx["current_lang"]
             w_data = get_watchlist_data(request)
             ctx.update(w_data)
             response = render(request, "movies/partials/watchlist_grid.html", ctx)
             response["HX-Trigger"] = json.dumps({
-                "showToast": {"title": "Zaktualizowano Twoje serwisy VOD", "type": "success"},
+                "showToast": {"title": i18n.t("toast_vod_updated", lang), "type": "success"},
                 "closeVodModal": True
             })
             return response
@@ -1002,12 +1006,7 @@ def toggle_watched(request, movie_id):
     watchlist_count = len(profiles.get_active_watchlist(request.session))
     lang = i18n.get_lang(request.session)
     toast_msg = i18n.t("toast_marked_watched", lang) if marked else i18n.t("toast_unmarked_watched", lang)
-    response = JsonResponse({
-        "marked": marked,
-        "watched_count": count,
-        "watchlist_count": watchlist_count
-    })
-    response["HX-Trigger"] = json.dumps({
+    trigger_payload = json.dumps({
         "showToast": {"title": toast_msg, "type": "success" if marked else "info"},
         "watchedChanged": {
             "movieId": int(movie_id),
@@ -1016,6 +1015,21 @@ def toggle_watched(request, movie_id):
             "watchlistCount": watchlist_count
         }
     })
+
+    if request.headers.get("HX-Target") == "watchlist-grid-container":
+        ctx = get_base_context(request)
+        w_data = get_watchlist_data(request)
+        ctx.update(w_data)
+        response = render(request, "movies/partials/watchlist_grid.html", ctx)
+        response["HX-Trigger"] = trigger_payload
+        return response
+
+    response = JsonResponse({
+        "marked": marked,
+        "watched_count": count,
+        "watchlist_count": watchlist_count
+    })
+    response["HX-Trigger"] = trigger_payload
     return response
 
 
@@ -1025,7 +1039,11 @@ def rate_movie(request, movie_id):
         body = json.loads(request.body.decode("utf-8")) if request.body else {}
         stars = int(body.get("stars", 0))
     except Exception:
-        stars = int(request.POST.get("stars", 0))
+        try:
+            stars = int(request.POST.get("stars", 0))
+        except (ValueError, TypeError):
+            stars = 0
+    stars = max(0, min(5, stars))
 
     ratings = profiles.set_movie_rating(request.session, movie_id, stars)
     request.session.modified = True
@@ -1047,9 +1065,44 @@ def discover(request):
     vote_min = request.GET.get("vote_min")
     year_min = request.GET.get("year_min")
     year_max = request.GET.get("year_max")
+    max_runtime = request.GET.get("max_runtime")
+    vod_filter = request.GET.get("vod", "all").strip()
     sort_by = request.GET.get("sort_by", "vote_desc")
-    page = int(request.GET.get("page", 1))
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
     per_page = 24
+
+    my_subs = profiles.get_active_vod_subscriptions(request.session)
+    supported_services = tmdb.get_supported_vod_services()
+    for s in supported_services:
+        s["is_subscribed"] = s["id"] in my_subs
+
+    candidate_ids = None
+    if vod_filter and vod_filter != "all":
+        target_pids = list(my_subs) if vod_filter == "my_vod" else ([int(vod_filter)] if vod_filter.isdigit() else [])
+        if target_pids:
+            pre_filtered = services.filter_movies(
+                genre=genre,
+                year_min=year_min,
+                year_max=year_max,
+                vote_min=vote_min,
+                language=language,
+                max_runtime=max_runtime,
+                sort_by=sort_by,
+                page=1,
+                per_page=180,
+                lang=lang,
+            )["items"]
+            enriched = attach_vod_parallel(pre_filtered, lang, target_pids)
+            candidate_ids = [
+                m["movie_id"]
+                for m in enriched
+                if any(int(p.get("id", -1)) in target_pids for p in (m.get("vod_flatrate", []) + m.get("vod_providers", [])))
+            ]
+        else:
+            candidate_ids = []
 
     filtered = services.filter_movies(
         genre=genre,
@@ -1057,11 +1110,15 @@ def discover(request):
         year_max=year_max,
         vote_min=vote_min,
         language=language,
+        max_runtime=max_runtime,
+        candidate_ids=candidate_ids,
         sort_by=sort_by,
         page=page,
         per_page=per_page,
         lang=lang,
     )
+
+    filtered["items"] = attach_vod_parallel(filtered["items"], lang, my_subs)
 
     ratings = profiles.get_active_ratings(request.session)
     for item in filtered["items"]:
@@ -1082,6 +1139,12 @@ def discover(request):
         "selected_genre": genre,
         "selected_language": language,
         "vote_min": vote_min,
+        "year_min": year_min,
+        "year_max": year_max,
+        "selected_runtime": max_runtime,
+        "selected_vod": vod_filter,
+        "supported_services": supported_services,
+        "my_subscriptions": my_subs,
         "sort_by": sort_by,
     })
 
@@ -1096,15 +1159,16 @@ def taste_dna(request):
     lang = ctx["current_lang"]
     ratings = profiles.get_active_ratings(request.session)
     watchlist_ids = profiles.get_active_watchlist(request.session)
+    watched_ids = profiles.get_active_watched(request.session)
     active_profile = profiles.get_active_profile_name(request.session)
 
     import hashlib
-    raw_sig = f"{active_profile}:{sorted(ratings.items())}:{sorted(watchlist_ids)}:{lang}"
+    raw_sig = f"{active_profile}:{sorted(ratings.items())}:{sorted(watchlist_ids)}:{sorted(watched_ids)}:{lang}"
     cache_key = f"taste_dna_{hashlib.md5(raw_sig.encode()).hexdigest()}"
     taste_data = cache.get(cache_key)
 
     if taste_data is None:
-        taste_data = taste.compute_taste_profile(ratings, watchlist_ids, lang=lang)
+        taste_data = taste.compute_taste_profile(ratings, watchlist_ids, lang=lang, watched_ids=watched_ids)
         cache.set(cache_key, taste_data, timeout=60 * 60 * 24)
 
     ctx.update({
@@ -1137,22 +1201,33 @@ def compare(request):
     p1 = request.GET.get("p1", profiles.get_active_profile_name(request.session))
     p2 = request.GET.get("p2", profile_names[1] if len(profile_names) > 1 else p1)
 
-    p1_data = all_profiles_dict.get(p1, {"ratings": {}, "watchlist": []})
-    p2_data = all_profiles_dict.get(p2, {"ratings": {}, "watchlist": []})
+    p1_data = all_profiles_dict.get(p1, {"ratings": {}, "watchlist": [], "watched": []})
+    p2_data = all_profiles_dict.get(p2, {"ratings": {}, "watchlist": [], "watched": []})
 
-    recommendations = recommender.recommend_for_group(
-        user1_ratings=p1_data.get("ratings", {}),
-        user1_watchlist=p1_data.get("watchlist", []),
-        user2_ratings=p2_data.get("ratings", {}),
-        user2_watchlist=p2_data.get("watchlist", []),
-        top_n=12,
-        lang=lang
-    )
+    mode_param = request.GET.get("mode", "").strip()
+    use_profile_mode = (mode_param == "profiles") or (("p1" in request.GET and "p2" in request.GET) and not preset and "vibe1" not in request.GET)
+    compare_mode = "profiles" if use_profile_mode else "vibes"
+    recommendations = []
+    if use_profile_mode:
+        recommendations = recommender.recommend_for_group(
+            user1_ratings=p1_data.get("ratings", {}),
+            user1_watchlist=p1_data.get("watchlist", []),
+            user2_ratings=p2_data.get("ratings", {}),
+            user2_watchlist=p2_data.get("watchlist", []),
+            top_n=12,
+            lang=lang,
+            user1_watched=p1_data.get("watched", []),
+            user2_watched=p2_data.get("watched", []),
+        )
 
     if not recommendations:
         recommendations = recommender.recommend_for_vibes(vibe1, vibe2, top_n=12, lang=lang)
 
-    harmony_score = recommender.get_harmony_score(vibe1, vibe2)
+    if use_profile_mode and recommendations:
+        top_scores = [int(r.get("match_score", 80)) for r in recommendations[:5]]
+        harmony_score = min(99, max(65, int(round(sum(top_scores) / len(top_scores)))))
+    else:
+        harmony_score = recommender.get_harmony_score(vibe1, vibe2)
 
     for rec in recommendations:
         prepare_movie_item(rec, lang=lang)
@@ -1167,6 +1242,7 @@ def compare(request):
         "vibe1": vibe1,
         "vibe2": vibe2,
         "preset": preset,
+        "compare_mode": compare_mode,
         "harmony_score": harmony_score,
         "p1": p1,
         "p2": p2,
@@ -1182,12 +1258,41 @@ def assistant(request):
     return render(request, "movies/assistant.html", ctx)
 
 
+ASSISTANT_MAX_MESSAGE_LEN = 300
+ASSISTANT_RATE_LIMIT = 20          # requests ...
+ASSISTANT_RATE_WINDOW = 60 * 60    # ... per hour per client
+IMPORT_MAX_BYTES = 1024 * 1024     # 1 MB
+
+
+def _client_ip(request) -> str:
+    """Client IP behind Render's proxy: the rightmost X-Forwarded-For entry is added by the proxy itself."""
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if xff:
+        return xff.split(",")[-1].strip()
+    return request.META.get("REMOTE_ADDR", "unknown")
+
+
+def _rate_limited(request, scope: str, limit: int, window: int) -> bool:
+    """Fixed-window counter in the cache. Returns True when the client exceeded the limit."""
+    key = f"rl:{scope}:{_client_ip(request)}"
+    cache.add(key, 0, window)
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, window)
+        count = 1
+    return count > limit
+
+
 def assistant_chat_partial(request):
     ctx = get_base_context(request)
     lang = ctx["current_lang"]
     user_message = request.POST.get("message", "").strip() or request.GET.get("message", "").strip()
     if not user_message:
         return HttpResponse("", status=400)
+    user_message = user_message[:ASSISTANT_MAX_MESSAGE_LEN]
+    if _rate_limited(request, "assistant", ASSISTANT_RATE_LIMIT, ASSISTANT_RATE_WINDOW):
+        return HttpResponse("Too many requests. Please try again later.", status=429)
 
     parsed = nl_query.parse_natural_query(user_message)
 
@@ -1231,9 +1336,44 @@ def create_profile(request):
 
 
 @require_POST
+def delete_profile_view(request):
+    profile_name = request.POST.get("profile_name", "").strip()
+    if profile_name:
+        profiles.delete_profile(request.session, profile_name)
+    return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+@require_POST
 def switch_language(request):
     lang_code = request.POST.get("lang", "PL").strip()
     i18n.set_lang(request.session, lang_code)
+    return redirect(request.META.get("HTTP_REFERER", "/"))
+
+
+def export_profile(request):
+    """Export current profiles and watchlists as downloadable JSON."""
+    data = profiles.export_profiles_data(request.session)
+    response = HttpResponse(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        content_type="application/json; charset=utf-8"
+    )
+    response["Content-Disposition"] = 'attachment; filename="watchwise_profiles_backup.json"'
+    return response
+
+
+@require_POST
+def import_profile(request):
+    """Import profiles from uploaded JSON file."""
+    uploaded_file = request.FILES.get("profile_file")
+    if uploaded_file and uploaded_file.size > IMPORT_MAX_BYTES:
+        return HttpResponse("File too large (max 1 MB).", status=413)
+    if uploaded_file:
+        try:
+            content = uploaded_file.read().decode("utf-8")
+            data = json.loads(content)
+            profiles.import_profiles_data(request.session, data)
+        except Exception:
+            pass
     return redirect(request.META.get("HTTP_REFERER", "/"))
 
 

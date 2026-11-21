@@ -36,7 +36,7 @@
                 <div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-gray-900"
                      hx-get="{% url 'movie_modal_partial' movie.movie_id %}"
                      hx-target="#movie-modal-container">
-                    <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                    <img loading="lazy" decoding="async" src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                     <div class="absolute top-1.5 right-1.5 bg-black/80 backdrop-blur-md text-brand-gold text-[10px] font-extrabold px-1.5 py-0.5 rounded-md border border-brand-gold/30">
                         ⭐ {{ movie.vote_average }}
                     </div>
@@ -55,7 +55,7 @@
                                 hx-swap="none"
                                 onclick="event.stopPropagation();"
                                 class="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/30 transition-all">
-                            + Biblioteka
+                            + {{ "add_to_watchlist"|t:current_lang }}
                         </button>
                     </div>
                 </div>

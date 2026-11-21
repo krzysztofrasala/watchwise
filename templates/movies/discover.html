@@ -35,6 +35,28 @@
         </div>
 
         <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "vod_platform"|t:current_lang }}</label>
+            <select name="vod" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
+                <option value="all" {% if selected_vod == "all" or not selected_vod %}selected{% endif %}>{{ "filter_all_movies"|t:current_lang }}</option>
+                <option value="my_vod" {% if selected_vod == "my_vod" %}selected{% endif %}>{{ "filter_my_vod_only"|t:current_lang }}</option>
+                {% for s in supported_services %}
+                <option value="{{ s.id }}" {% if selected_vod == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "max_runtime_label"|t:current_lang }}</label>
+            <select name="max_runtime" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
+                <option value="" {% if not selected_runtime %}selected{% endif %}>{{ "runtime_any"|t:current_lang }}</option>
+                <option value="90" {% if selected_runtime == "90" %}selected{% endif %}>{{ "runtime_short"|t:current_lang }}</option>
+                <option value="105" {% if selected_runtime == "105" %}selected{% endif %}>{{ "runtime_medium"|t:current_lang }}</option>
+                <option value="120" {% if selected_runtime == "120" %}selected{% endif %}>{{ "runtime_standard"|t:current_lang }}</option>
+                <option value="121" {% if selected_runtime == "121" %}selected{% endif %}>{{ "runtime_epic"|t:current_lang }}</option>
+            </select>
+        </div>
+
+        <div>
             <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "original_language"|t:current_lang }}</label>
             <select name="language" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
                 <option value="">{{ "all_languages"|t:current_lang }}</option>
@@ -52,11 +74,32 @@
         <div>
             <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "min_rating"|t:current_lang }}</label>
             <select name="vote_min" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
-                <option value="">{{ "all_ratings"|t:current_lang }}</option>
-                <option value="8.0">{{ "masterpieces"|t:current_lang }}</option>
-                <option value="7.5">{{ "very_good"|t:current_lang }}</option>
-                <option value="7.0">{{ "good"|t:current_lang }}</option>
-                <option value="6.0">{{ "decent"|t:current_lang }}</option>
+                <option value="" {% if not vote_min %}selected{% endif %}>{{ "all_ratings"|t:current_lang }}</option>
+                <option value="8.0" {% if vote_min == "8.0" %}selected{% endif %}>{{ "masterpieces"|t:current_lang }}</option>
+                <option value="7.5" {% if vote_min == "7.5" %}selected{% endif %}>{{ "very_good"|t:current_lang }}</option>
+                <option value="7.0" {% if vote_min == "7.0" %}selected{% endif %}>{{ "good"|t:current_lang }}</option>
+                <option value="6.0" {% if vote_min == "6.0" %}selected{% endif %}>{{ "decent"|t:current_lang }}</option>
+            </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "year_from"|t:current_lang }}</label>
+                <input type="number" name="year_min" min="1920" max="2030" value="{{ year_min|default:'' }}" placeholder="1980" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "year_to"|t:current_lang }}</label>
+                <input type="number" name="year_max" min="1920" max="2030" value="{{ year_max|default:'' }}" placeholder="2026" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">{{ "sort_by_label"|t:current_lang }}</label>
+            <select name="sort_by" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
+                <option value="vote_desc" {% if sort_by == "vote_desc" %}selected{% endif %}>{{ "sort_vote_desc"|t:current_lang }}</option>
+                <option value="year_desc" {% if sort_by == "year_desc" %}selected{% endif %}>{{ "sort_year_desc"|t:current_lang }}</option>
+                <option value="year_asc" {% if sort_by == "year_asc" %}selected{% endif %}>{{ "sort_year_asc"|t:current_lang }}</option>
+                <option value="title_asc" {% if sort_by == "title_asc" %}selected{% endif %}>{{ "sort_title_asc"|t:current_lang }}</option>
             </select>
         </div>
 

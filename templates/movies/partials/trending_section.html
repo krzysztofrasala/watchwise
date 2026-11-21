@@ -82,7 +82,7 @@
         >
             <!-- Poster Image -->
             <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img loading="lazy" decoding="async" src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 
                 <!-- Media Type / Badge Tag -->
                 {% if movie.media_badge %}

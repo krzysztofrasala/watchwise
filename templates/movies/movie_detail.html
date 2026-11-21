@@ -298,10 +298,11 @@
                     <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">{{ "top_cast"|t:current_lang }}</h3>
                     <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                         {% for actor in movie.cast_details|slice:":6" %}
-                        <div class="flex items-center gap-2 bg-white/5 p-2 rounded-xl border border-white/5">
-                            <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0">
+                        <div class="flex items-center gap-2 bg-white/5 hover:bg-white/10 p-2 rounded-xl border border-white/5 hover:border-brand-gold/40 cursor-pointer transition-all group"
+                             onclick="searchActor('{{ actor.name|escapejs }}')">
+                            <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="w-9 h-9 rounded-full object-cover border border-white/10 group-hover:border-brand-gold shrink-0">
                             <div class="overflow-hidden">
-                                <p class="text-xs font-bold text-white truncate">{{ actor.name }}</p>
+                                <p class="text-xs font-bold text-white group-hover:text-brand-gold truncate transition-colors">{{ actor.name }}</p>
                                 <p class="text-[10px] text-gray-400 truncate">{{ actor.character }}</p>
                             </div>
                         </div>
@@ -327,7 +328,7 @@
                  hx-target="#movie-modal-container"
                  hx-push-url="/movie/{{ rec.movie_id }}/">
                 <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
-                    <img src="{{ rec.poster_url }}" alt="{{ rec.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                    <img loading="lazy" decoding="async" src="{{ rec.poster_url }}" alt="{{ rec.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                     <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[10px] font-extrabold px-1.5 py-0.5 rounded-md border border-brand-gold/30">
                         ⭐ {{ rec.vote_average }}
                     </div>
@@ -387,6 +388,60 @@
                 wBtn.className = 'px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border bg-white/5 text-white border-white/10 hover:bg-brand-gold hover:text-black hover:border-brand-gold';
                 wText.innerText = '{{ "add_to_watchlist"|t:current_lang }}';
             }
+        }
+    }
+
+    function rateMovie(movieId, stars) {
+        fetch(`/rate/${movieId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ stars: stars })
+        }).then(res => {
+            const triggerHeader = res.headers.get('HX-Trigger');
+            if (triggerHeader && typeof showToast === 'function') {
+                try {
+                    const parsed = JSON.parse(triggerHeader);
+                    if (parsed.showToast) {
+                        showToast(parsed.showToast.title || parsed.showToast.message || '', parsed.showToast.message || '', parsed.showToast.type || 'success');
+                    }
+                } catch (e) {}
+            }
+            return res.json();
+        }).then(data => {
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById(`star-${movieId}-${i}`);
+                if (el) {
+                    el.style.color = (i <= stars) ? '#F5C518' : '#6b7280';
+                }
+            }
+        });
+    }
+
+    function searchActor(name) {
+        const inputs = Array.from(document.querySelectorAll('input[name="q"]'));
+        let input = inputs.find(el => el.offsetParent !== null);
+        if (!input && inputs.length > 0) {
+            const mobileBar = document.getElementById('mobile-search-bar');
+            if (mobileBar && mobileBar.classList.contains('hidden')) {
+                mobileBar.classList.remove('hidden');
+            }
+            input = inputs[0];
+        }
+        if (input) {
+            input.value = name;
+            input.focus();
+            htmx.trigger(input, 'keyup');
+        }
+    }
+
+    const userRating = {{ user_rating|default:0 }};
+    if (userRating > 0) {
+        for (let i = 1; i <= userRating; i++) {
+            const el = document.getElementById(`star-{{ movie.movie_id }}-${i}`);
+            if (el) el.style.color = '#F5C518';
         }
     }
 </script>

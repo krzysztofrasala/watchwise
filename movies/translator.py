@@ -1,9 +1,13 @@
 """Dynamic translation helper with caching for movie overviews and taglines."""
 
 from __future__ import annotations
+import hashlib
 import json
 import logging
 import os
+import tempfile
+import threading
+import time
 from pathlib import Path
 from django.core.cache import cache
 import requests
@@ -14,31 +18,43 @@ TRANSLATE_API_URL = "https://api.mymemory.translated.net/get"
 CACHE_FILE = Path(__file__).resolve().parent.parent / "data" / "translations_cache.json"
 
 _disk_cache: dict[str, str] | None = None
+_cache_lock = threading.Lock()
+_translate_unreachable_until: float = 0.0
 
 
 def _get_disk_cache() -> dict[str, str]:
     global _disk_cache
-    if _disk_cache is None:
-        if CACHE_FILE.exists():
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    _disk_cache = json.load(f)
-            except Exception:
+    with _cache_lock:
+        if _disk_cache is None:
+            if CACHE_FILE.exists():
+                try:
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        _disk_cache = json.load(f)
+                except Exception:
+                    _disk_cache = {}
+            else:
                 _disk_cache = {}
-        else:
-            _disk_cache = {}
-    return _disk_cache
+        return _disk_cache
 
 
 def _save_disk_cache() -> None:
     global _disk_cache
-    if _disk_cache is not None:
-        try:
-            CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(_disk_cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.debug("Failed to save translation disk cache: %s", e)
+    with _cache_lock:
+        if _disk_cache is not None:
+            try:
+                CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                snapshot = dict(_disk_cache)
+                fd, tmp_path = tempfile.mkstemp(dir=str(CACHE_FILE.parent), suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        json.dump(snapshot, f, ensure_ascii=False, indent=2)
+                    os.replace(tmp_path, CACHE_FILE)
+                except Exception:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                    raise
+            except Exception as e:
+                logger.debug("Failed to save translation disk cache: %s", e)
 
 
 def translate_text(text: str, target_lang: str = "ES", source_lang: str | None = None) -> str:
@@ -65,7 +81,7 @@ def translate_text(text: str, target_lang: str = "ES", source_lang: str | None =
         return text
 
     # Cache key based on hash of text and language pair
-    cache_key = f"trans_{source_code}_{target_code}_{abs(hash(text))}"
+    cache_key = f"trans_{source_code}_{target_code}_{hashlib.md5(text.encode('utf-8')).hexdigest()}"
 
     # 1. Check disk cache first
     disk_cache = _get_disk_cache()
@@ -76,10 +92,15 @@ def translate_text(text: str, target_lang: str = "ES", source_lang: str | None =
     try:
         cached = cache.get(cache_key)
         if cached:
-            disk_cache[cache_key] = cached
+            with _cache_lock:
+                disk_cache[cache_key] = cached
             return cached
     except Exception:
         pass
+
+    global _translate_unreachable_until
+    if time.monotonic() < _translate_unreachable_until:
+        return text
 
     try:
         # MyMemory supports chunks up to 500 chars per query.
@@ -118,7 +139,8 @@ def translate_text(text: str, target_lang: str = "ES", source_lang: str | None =
         result = " ".join(translated_chunks) if translated_chunks else text
         if result and result != text:
             # Save to disk and django cache
-            disk_cache[cache_key] = result
+            with _cache_lock:
+                disk_cache[cache_key] = result
             _save_disk_cache()
             try:
                 cache.set(cache_key, result, timeout=60 * 60 * 24 * 30)  # 30 days
@@ -126,6 +148,7 @@ def translate_text(text: str, target_lang: str = "ES", source_lang: str | None =
                 pass
             return result
     except Exception as e:
+        _translate_unreachable_until = time.monotonic() + 15.0
         logger.debug("Translation failed: %s", e)
 
     return text

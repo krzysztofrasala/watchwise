@@ -57,7 +57,11 @@ def load_dataset():
     movies_df = pd.DataFrame(movies_dict)
 
     with open(NEIGHBORS_FILE, "rb") as f:
-        neighbors = pickle.load(f)
+        neighbors_raw = pickle.load(f)
+    neighbors = {
+        "indices": np.asarray(neighbors_raw["indices"], dtype=np.int32),
+        "scores": np.asarray(neighbors_raw["scores"], dtype=np.float32),
+    }
 
     raw_df = pd.read_csv(MOVIES_CSV_FILE)
     raw_df["year"] = pd.to_datetime(raw_df.get("release_date"), errors="coerce").dt.year.fillna(0).astype(int)
@@ -100,18 +104,45 @@ def load_dataset():
 
 @lru_cache(maxsize=1)
 def load_dataset_with_vectors():
-    """Load movies dataframe along with sentence transformer dense embeddings vectors."""
+    """Load movies dataframe along with L2-normalized sparse/dense embedding vectors."""
+    import scipy.sparse as sp
+    from sklearn.preprocessing import normalize
+
     movies_df, _ = load_dataset()
     vectors = None
     is_dense = True
 
     if VECTORS_FILE.exists():
-        npz = np.load(VECTORS_FILE)
-        if "vectors" in npz:
-            vectors = npz["vectors"]
-            is_dense = True
+        try:
+            npz = np.load(VECTORS_FILE, allow_pickle=True)
+            if "vectors" in npz:
+                raw_vecs = np.asarray(npz["vectors"], dtype=np.float32)
+                vectors = normalize(raw_vecs, norm="l2", axis=1, copy=False)
+                is_dense = True
+            else:
+                sparse_vecs = sp.load_npz(VECTORS_FILE).astype(np.float32)
+                vectors = normalize(sparse_vecs, norm="l2", axis=1, copy=False)
+                is_dense = False
+        except Exception:
+            vectors = None
 
     return movies_df, vectors, is_dense
+
+
+@lru_cache(maxsize=1)
+def get_genre_row_mask_map() -> dict[str, np.ndarray]:
+    """Precomputed boolean row mask per genre for O(1) vectorized filtering."""
+    movies_df, _ = load_dataset()
+    genre_lists = movies_df["genres_list"].tolist()
+    n = len(genre_lists)
+    masks: dict[str, np.ndarray] = {}
+    for row_idx, g_list in enumerate(genre_lists):
+        if isinstance(g_list, list):
+            for g in g_list:
+                if g not in masks:
+                    masks[g] = np.zeros(n, dtype=bool)
+                masks[g][row_idx] = True
+    return masks
 
 
 @lru_cache(maxsize=1)
@@ -245,6 +276,19 @@ def search_movies(query: str, lang: str = "PL", limit: int = 12):
     q = query.strip().lower()
     matches = movies_df[movies_df["title"].str.lower().str.contains(q, na=False, regex=False)]
     local_results = matches.head(limit).to_dict(orient="records")
+
+    # Fallback/supplement: match actor, director, or keywords in tags column
+    if len(local_results) < limit and "tags" in movies_df.columns:
+        q_compact = re.sub(r"\s+", "", q)
+        tags_lower = movies_df["tags"].astype(str).str.lower()
+        tag_mask = tags_lower.str.contains(q, na=False, regex=False)
+        if len(q_compact) >= 4 and q_compact != q:
+            tag_mask = tag_mask | tags_lower.str.contains(q_compact, na=False, regex=False)
+        existing_ids = {int(r["movie_id"]) for r in local_results}
+        tag_matches = movies_df[tag_mask & ~movies_df["movie_id"].isin(existing_ids)].sort_values(
+            by="vote_average", ascending=False
+        )
+        local_results.extend(tag_matches.head(limit - len(local_results)).to_dict(orient="records"))
     lang_upper = (lang or "PL").upper()
     for r in local_results:
         r["media_badge"] = f"🎬 {i18n.t('badge_movie', lang)}"
@@ -293,27 +337,62 @@ def filter_movies(
     year_max: int = None,
     vote_min: float = None,
     language: str = None,
+    max_runtime: int = None,
+    candidate_ids: list[int] = None,
     sort_by: str = "popularity",
     page: int = 1,
     per_page: int = 24,
     lang: str = "PL",
 ):
     movies_df, _ = load_dataset()
-    df = movies_df.copy()
+    mask = np.ones(len(movies_df), dtype=bool)
 
     if genre and genre != "All":
-        df = df[df["genres_list"].apply(lambda g: isinstance(g, list) and genre in g)]
+        genre_masks = get_genre_row_mask_map()
+        if genre in genre_masks:
+            mask &= genre_masks[genre]
+        else:
+            mask &= movies_df["genres_list"].apply(lambda g: isinstance(g, list) and genre in g).to_numpy()
 
     if year_min:
-        df = df[df["year"] >= int(year_min)]
+        try:
+            mask &= (movies_df["year"].to_numpy() >= int(year_min))
+        except (ValueError, TypeError):
+            pass
     if year_max and int(year_max) > 0:
-        df = df[df["year"] <= int(year_max)]
+        try:
+            mask &= (movies_df["year"].to_numpy() <= int(year_max))
+        except (ValueError, TypeError):
+            pass
 
     if vote_min:
-        df = df[df["vote_average"] >= float(vote_min)]
+        try:
+            mask &= (movies_df["vote_average"].to_numpy() >= float(vote_min))
+        except (ValueError, TypeError):
+            pass
 
     if language:
-        df = df[df["original_language"].str.lower() == language.lower()]
+        mask &= (movies_df["original_language"].str.lower() == language.lower()).to_numpy()
+
+    if max_runtime:
+        try:
+            rt = int(max_runtime)
+            runtimes = movies_df["runtime"].to_numpy()
+            if rt == 121:  # 120+ min epic
+                mask &= (runtimes >= 120)
+            elif rt > 0:
+                mask &= (runtimes > 0) & (runtimes <= rt)
+        except (ValueError, TypeError):
+            pass
+
+    if candidate_ids is not None:
+        try:
+            cand_set = {int(x) for x in candidate_ids}
+            mask &= movies_df["movie_id"].isin(cand_set).to_numpy()
+        except Exception:
+            pass
+
+    df = movies_df[mask]
 
     if sort_by in ("vote_desc", "rating_desc"):
         df = df.sort_values(by="vote_average", ascending=False)

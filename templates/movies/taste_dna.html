@@ -32,23 +32,57 @@
     </div>
 
     <!-- Metrics Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div class="glass-card p-4 rounded-2xl text-center space-y-1">
             <div class="text-xs text-gray-400 font-semibold uppercase">{{ "total_rated"|t:current_lang }}</div>
             <div class="text-3xl font-black text-brand-gold">{{ taste_data.total_rated }}</div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "watched_count_label"|t:current_lang }}</div>
+            <div class="text-3xl font-black text-blue-400">{{ taste_data.total_watched|default:0 }}</div>
         </div>
         <div class="glass-card p-4 rounded-2xl text-center space-y-1">
             <div class="text-xs text-gray-400 font-semibold uppercase">{{ "watchlist_count"|t:current_lang }}</div>
             <div class="text-3xl font-black text-emerald-400">{{ taste_data.total_watchlist }}</div>
         </div>
         <div class="glass-card p-4 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-gray-400 font-semibold uppercase">{{ "avg_runtime_label"|t:current_lang }}</div>
+            <div class="text-xl font-bold text-amber-400 truncate">{% if taste_data.avg_runtime %}{{ taste_data.avg_runtime }} min{% else %}{{ "no_data"|t:current_lang }}{% endif %}</div>
+        </div>
+        <div class="glass-card p-4 rounded-2xl text-center space-y-1">
             <div class="text-xs text-gray-400 font-semibold uppercase">{{ "top_genre"|t:current_lang }}</div>
-            <div class="text-xl font-bold text-pink-400 truncate">{{ taste_data.genre_labels.0|default:"no_data"|t:current_lang }}</div>
+            <div class="text-xl font-bold text-pink-400 truncate">{% if taste_data.genre_labels %}{{ taste_data.genre_labels.0 }}{% else %}{{ "no_data"|t:current_lang }}{% endif %}</div>
         </div>
         <div class="glass-card p-4 rounded-2xl text-center space-y-1">
             <div class="text-xs text-gray-400 font-semibold uppercase">{{ "top_decade"|t:current_lang }}</div>
-            <div class="text-xl font-bold text-purple-400 truncate">{{ taste_data.decade_labels.0|default:"no_data"|t:current_lang }}</div>
+            <div class="text-xl font-bold text-purple-400 truncate">{% if taste_data.decade_labels %}{{ taste_data.decade_labels.0 }}{% else %}{{ "no_data"|t:current_lang }}{% endif %}</div>
         </div>
+    </div>
+
+    <!-- Critic Style Card -->
+    <div class="glass-panel p-6 rounded-3xl border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+            <div class="text-4xl p-3 rounded-2xl bg-brand-gold/10 border border-brand-gold/25 shrink-0">
+                {{ taste_data.critic_icon|default:"🍿" }}
+            </div>
+            <div>
+                <span class="text-[10px] font-extrabold uppercase text-brand-gold tracking-wider">{{ "critic_style_label"|t:current_lang }}</span>
+                <h3 class="text-lg font-black text-white">{{ taste_data.critic_title }}</h3>
+                <p class="text-xs text-gray-400 max-w-xl mt-0.5">{{ taste_data.critic_desc }}</p>
+            </div>
+        </div>
+        {% if taste_data.avg_user_rating > 0 %}
+        <div class="flex items-center gap-6 shrink-0">
+            <div class="text-center">
+                <div class="text-[10px] font-bold uppercase text-gray-400">{{ "your_avg_rating"|t:current_lang }}</div>
+                <div class="text-2xl font-black text-brand-gold">⭐ {{ taste_data.avg_user_rating }}/5</div>
+            </div>
+            <div class="text-center">
+                <div class="text-[10px] font-bold uppercase text-gray-400">{{ "tmdb_avg_rating"|t:current_lang }}</div>
+                <div class="text-2xl font-black text-gray-200">🎬 {{ taste_data.avg_tmdb_rating }}/10</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Charts Grid -->
@@ -73,6 +107,33 @@
             </div>
         </div>
     </div>
+
+    {% if taste_data.top_rated_movies %}
+    <!-- Top Rated Hall of Fame -->
+    <div class="space-y-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <i data-lucide="award" class="w-5 h-5 text-brand-gold"></i> {{ "top_rated_hall_of_fame"|t:current_lang }}
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+            {% for m in taste_data.top_rated_movies %}
+            <div class="glass-card rounded-2xl overflow-hidden cursor-pointer group border border-white/10 hover:border-brand-gold/50 transition-all"
+                 hx-get="{% url 'movie_modal_partial' m.movie_id %}"
+                 hx-target="#movie-modal-container">
+                <div class="aspect-[2/3] relative bg-gray-900 overflow-hidden">
+                    <img loading="lazy" decoding="async" src="{{ m.poster_url }}" alt="{{ m.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform">
+                    <div class="absolute top-2 right-2 bg-black/80 text-brand-gold text-[11px] font-black px-2 py-0.5 rounded-md border border-brand-gold/30">
+                        ⭐ {{ m.user_rating }}/5
+                    </div>
+                </div>
+                <div class="p-2.5">
+                    <h4 class="text-xs font-bold text-white truncate group-hover:text-brand-gold">{{ m.title }}</h4>
+                    <span class="text-[10px] text-gray-400">{{ m.year }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>

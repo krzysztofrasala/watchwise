@@ -10,6 +10,53 @@ DEFAULT_PROFILE_NAME = "Główny"
 DEFAULT_VOD_SUBSCRIPTIONS = [8, 337, 1899]  # Netflix, Disney+, Max
 
 
+def _normalize_profile_dict(p_data: dict[str, Any]) -> dict[str, Any]:
+    watchlist = []
+    for x in p_data.get("watchlist", []):
+        try:
+            mid = int(x)
+            if mid not in watchlist:
+                watchlist.append(mid)
+        except (ValueError, TypeError):
+            pass
+
+    watched = []
+    for x in p_data.get("watched", []):
+        try:
+            mid = int(x)
+            if mid not in watched:
+                watched.append(mid)
+        except (ValueError, TypeError):
+            pass
+
+    watchlist = [mid for mid in watchlist if mid not in watched]
+
+    vod_subs = []
+    for x in p_data.get("vod_subscriptions", list(DEFAULT_VOD_SUBSCRIPTIONS)):
+        try:
+            pid = int(x)
+            if pid not in vod_subs:
+                vod_subs.append(pid)
+        except (ValueError, TypeError):
+            pass
+
+    ratings = {}
+    raw_ratings = p_data.get("ratings", {})
+    if isinstance(raw_ratings, dict):
+        for k, v in raw_ratings.items():
+            try:
+                ratings[int(k)] = min(5, max(1, int(v)))
+            except (ValueError, TypeError):
+                pass
+
+    return {
+        "watchlist": watchlist,
+        "watched": watched,
+        "ratings": ratings,
+        "vod_subscriptions": vod_subs,
+    }
+
+
 def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
     """Ensure profiles state exists in session and return current state."""
     if "profiles" not in session:
@@ -25,7 +72,7 @@ def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
         if hasattr(session, "modified"):
             session.modified = True
     else:
-        # Backwards compatibility: ensure every profile has watched & vod_subscriptions
+        # Backwards compatibility: ensure every profile has watched, vod_subscriptions, and int rating keys
         updated = False
         for p_name, p_data in session["profiles"].items():
             if "watched" not in p_data:
@@ -33,6 +80,16 @@ def get_profile_data(session: dict[str, Any]) -> dict[str, Any]:
                 updated = True
             if "vod_subscriptions" not in p_data:
                 p_data["vod_subscriptions"] = list(DEFAULT_VOD_SUBSCRIPTIONS)
+                updated = True
+            raw_ratings = p_data.get("ratings", {})
+            if isinstance(raw_ratings, dict) and any(not isinstance(k, int) for k in raw_ratings.keys()):
+                norm_ratings = {}
+                for k, v in raw_ratings.items():
+                    try:
+                        norm_ratings[int(k)] = int(v)
+                    except (ValueError, TypeError):
+                        pass
+                p_data["ratings"] = norm_ratings
                 updated = True
         if updated and hasattr(session, "modified"):
             session.modified = True
@@ -67,6 +124,22 @@ def add_profile(session: dict[str, Any], name: str) -> bool:
     }
     session["profiles"] = profiles
     session["active_profile"] = clean_name
+    if hasattr(session, "modified"):
+        session.modified = True
+    return True
+
+
+def delete_profile(session: dict[str, Any], name: str) -> bool:
+    """Delete a sub-profile if it is not the default profile and more than 1 profile exists."""
+    profiles = get_profile_data(session)
+    clean_name = (name or "").strip()
+    if not clean_name or clean_name == DEFAULT_PROFILE_NAME or clean_name not in profiles or len(profiles) <= 1:
+        return False
+
+    del profiles[clean_name]
+    session["profiles"] = profiles
+    if session.get("active_profile") == clean_name:
+        session["active_profile"] = DEFAULT_PROFILE_NAME if DEFAULT_PROFILE_NAME in profiles else next(iter(profiles.keys()))
     if hasattr(session, "modified"):
         session.modified = True
     return True
@@ -230,3 +303,45 @@ def set_movie_rating(session: dict[str, Any], movie_id: int, stars: int) -> dict
         session.modified = True
     return ratings
 
+
+def export_profiles_data(session: dict[str, Any]) -> dict[str, Any]:
+    """Return exportable JSON-safe dictionary of user profiles, ratings, watchlists, watched, and VOD subscriptions."""
+    get_profile_data(session)
+    return {
+        "app": "WatchWise",
+        "version": "2.1",
+        "active_profile": get_active_profile_name(session),
+        "profiles": session.get("profiles", {}),
+    }
+
+
+def import_profiles_data(session: dict[str, Any], data: dict[str, Any]) -> bool:
+    """Validate and import profiles data into the user session."""
+    if not isinstance(data, dict):
+        return False
+    incoming_profiles = data.get("profiles")
+    if not isinstance(incoming_profiles, dict) or not incoming_profiles:
+        return False
+
+    clean_profiles = {}
+    for name, p_data in incoming_profiles.items():
+        if not isinstance(p_data, dict):
+            continue
+        clean_name = str(name).strip()
+        if not clean_name:
+            continue
+        clean_profiles[clean_name] = _normalize_profile_dict(p_data)
+
+    if not clean_profiles:
+        return False
+
+    session["profiles"] = clean_profiles
+    active = str(data.get("active_profile", "")).strip()
+    if active in clean_profiles:
+        session["active_profile"] = active
+    else:
+        session["active_profile"] = next(iter(clean_profiles.keys()))
+
+    if hasattr(session, "modified"):
+        session.modified = True
+    return True

@@ -10,7 +10,7 @@
         >
             <!-- Poster image -->
             <div class="aspect-[2/3] w-full overflow-hidden relative bg-gray-900">
-                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img loading="lazy" decoding="async" src="{{ movie.poster_url }}" alt="{{ movie.title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 
                 <!-- Rating Badge -->
                 <div class="absolute top-2 right-2 bg-black/80 backdrop-blur-md text-brand-gold text-[11px] font-extrabold px-2 py-0.5 rounded-md border border-brand-gold/30 flex items-center gap-1 shadow-md">

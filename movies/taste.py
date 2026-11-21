@@ -3,7 +3,46 @@
 from __future__ import annotations
 from typing import Any
 import pandas as pd
-from . import services
+from . import services, tmdb
+
+CRITIC_STYLES = {
+    "PL": {
+        "harsh": ("🧐", "Surowy Krytyk", "Oceniasz filmy ostrzej niż średnia światowa TMDB — u Ciebie na 5★ trzeba naprawdę zasłużyć."),
+        "enthusiast": ("🤩", "Entuzjasta Kina", "Czerpiesz czystą radość z seansów i oceniasz filmy wyżej niż globalna średnia TMDB."),
+        "balanced": ("⚖️", "Zbalansowany Kinoman", "Twoje oceny są w idealnej harmonii ze światowymi ocenami krytyków i widzów."),
+        "unrated": ("🍿", "Odkrywca", "Oceń kilka filmów gwiazdkami, aby odkryć swój styl oceniania na tle społeczności."),
+    },
+    "EN": {
+        "harsh": ("🧐", "Harsh Critic", "You rate movies more strictly than the global TMDB average — 5★ must be truly earned."),
+        "enthusiast": ("🤩", "Cinema Enthusiast", "You find joy in cinema and rate movies more generously than the global average."),
+        "balanced": ("⚖️", "Balanced Cinephile", "Your ratings align closely with global audience and critic consensus."),
+        "unrated": ("🍿", "Explorer", "Rate a few movies with stars to unlock your critic style comparison."),
+    },
+    "DE": {
+        "harsh": ("🧐", "Strenger Kritiker", "Du bewertest Filme strenger als der weltweite TMDB-Durchschnitt."),
+        "enthusiast": ("🤩", "Kino-Enthusiast", "Du bewertest Filme großzügiger als der weltweite Durchschnitt."),
+        "balanced": ("⚖️", "Ausgewogener Cineast", "Deine Bewertungen stimmen eng mit dem weltweiten Publikum überein."),
+        "unrated": ("🍿", "Entdecker", "Bewerte einige Filme, um deinen Kritiker-Stil freizuschalten."),
+    },
+    "ES": {
+        "harsh": ("🧐", "Crítico Exigente", "Calificas las películas con más rigor que el promedio mundial de TMDB."),
+        "enthusiast": ("🤩", "Entusiasta del Cine", "Disfrutas cada película y calificas con más generosidad que el promedio."),
+        "balanced": ("⚖️", "Cinéfilo Equilibrado", "Tus calificaciones coinciden con el consenso mundial."),
+        "unrated": ("🍿", "Explorador", "Califica algunas películas para descubrir tu estilo de crítico."),
+    },
+    "FR": {
+        "harsh": ("🧐", "Critique Exigeant", "Vous notez les films plus sévèrement que la moyenne mondiale TMDB."),
+        "enthusiast": ("🤩", "Cinéphile Enthousiaste", "Vous notez les films plus généreusement que la moyenne mondiale."),
+        "balanced": ("⚖️", "Cinéphile Équilibré", "Vos notes sont en harmonie avec le consensus mondial."),
+        "unrated": ("🍿", "Explorateur", "Notez quelques films pour découvrir votre profil de critique."),
+    },
+    "IT": {
+        "harsh": ("🧐", "Critico Severo", "Valuti i film in modo più rigoroso rispetto alla media globale TMDB."),
+        "enthusiast": ("🤩", "Entusiasta del Cinema", "Valuti i film con più generosità rispetto alla media globale."),
+        "balanced": ("⚖️", "Cinefilo Equilibrato", "I tuoi voti sono in perfetto equilibrio con il pubblico globale."),
+        "unrated": ("🍿", "Esploratore", "Valuta alcuni film per scoprire il tuo stile di critica."),
+    },
+}
 
 PERSONAS = {
     "PL": [
@@ -108,7 +147,12 @@ FALLBACK_PERSONA = {
 }
 
 
-def compute_taste_profile(user_ratings: dict[int, int], watchlist_ids: list[int], lang: str = "PL") -> dict[str, Any]:
+def compute_taste_profile(
+    user_ratings: dict[int, int],
+    watchlist_ids: list[int],
+    lang: str = "PL",
+    watched_ids: list[int] | None = None,
+) -> dict[str, Any]:
     """Calculate genre distribution, decade distribution, persona, and total stats."""
     genre_scores: dict[str, float] = {}
     decade_scores: dict[int, float] = {}
@@ -117,15 +161,68 @@ def compute_taste_profile(user_ratings: dict[int, int], watchlist_ids: list[int]
 
     total_rated = len(user_ratings)
     total_watchlist = len(watchlist_ids)
+    rated_mids = set()
+    runtimes: list[int] = []
+    tmdb_votes_for_rated: list[float] = []
+    user_stars_list: list[int] = []
+    top_rated_candidates: list[tuple[int, float, dict[str, Any]]] = []
 
-    # Process rated movies
+    code = (lang or "PL").upper().strip()
+    if code not in CRITIC_STYLES:
+        code = "PL"
+
+    # Process rated movies (only positive/neutral ratings >= 3 contribute to affinity)
     for mid, stars in user_ratings.items():
         mid = int(mid)
+        stars_int = int(stars)
+        rated_mids.add(mid)
+        user_stars_list.append(stars_int)
+        movie = id_to_movie.get(mid)
+        if movie:
+            v_avg = float(movie.get("vote_average", 0.0) or 0.0)
+            if v_avg > 0:
+                tmdb_votes_for_rated.append(v_avg)
+            rt = int(movie.get("runtime", 0) or 0)
+            if rt > 0:
+                runtimes.append(rt)
+            if stars_int >= 4:
+                loc_movie = services.get_movie_by_id(mid, lang=lang) or movie
+                top_rated_candidates.append((stars_int, v_avg, {
+                    "movie_id": mid,
+                    "title": loc_movie.get("title", movie.get("title", "")),
+                    "year": movie.get("year") or "",
+                    "poster_url": tmdb.get_poster_url(movie.get("poster_path")),
+                    "vote_average": round(v_avg, 1),
+                    "user_rating": stars_int,
+                }))
+
+        if stars_int < 3 or not movie:
+            continue
+        weight = float(stars_int) / 3.0  # rating weight
+
+        genres = movie.get("genres_list", [])
+        for g in genres:
+            genre_scores[g] = genre_scores.get(g, 0.0) + weight
+
+        year = movie.get("year", 0)
+        if year and year > 1900:
+            decade = (int(year) // 10) * 10
+            decade_scores[decade] = decade_scores.get(decade, 0.0) + weight
+
+    # Process watched movies not already rated (weight 0.6)
+    watched_set = set()
+    for mid in (watched_ids or []):
+        mid = int(mid)
+        watched_set.add(mid)
+        if mid in rated_mids:
+            continue
         movie = id_to_movie.get(mid)
         if not movie:
             continue
-        weight = float(stars) / 3.0  # rating weight
-
+        rt = int(movie.get("runtime", 0) or 0)
+        if rt > 0:
+            runtimes.append(rt)
+        weight = 0.6
         genres = movie.get("genres_list", [])
         for g in genres:
             genre_scores[g] = genre_scores.get(g, 0.0) + weight
@@ -138,9 +235,14 @@ def compute_taste_profile(user_ratings: dict[int, int], watchlist_ids: list[int]
     # Process watchlist movies (weight 0.5)
     for mid in watchlist_ids:
         mid = int(mid)
+        if mid in rated_mids:
+            continue
         movie = id_to_movie.get(mid)
         if not movie:
             continue
+        rt = int(movie.get("runtime", 0) or 0)
+        if rt > 0:
+            runtimes.append(rt)
         weight = 0.5
         genres = movie.get("genres_list", [])
         for g in genres:
@@ -164,12 +266,39 @@ def compute_taste_profile(user_ratings: dict[int, int], watchlist_ids: list[int]
     decade_labels = [f"{d[0]}s" for d in sorted_decades]
     decade_values = [round(d[1], 1) for d in sorted_decades]
 
+    avg_user_rating = round(sum(user_stars_list) / len(user_stars_list), 2) if user_stars_list else 0.0
+    avg_tmdb_rating = round(sum(tmdb_votes_for_rated) / len(tmdb_votes_for_rated), 1) if tmdb_votes_for_rated else 0.0
+    avg_runtime = int(round(sum(runtimes) / len(runtimes))) if runtimes else 0
+
+    styles = CRITIC_STYLES[code]
+    if not user_stars_list:
+        critic_icon, critic_title, critic_desc = styles["unrated"]
+    else:
+        diff = (avg_user_rating * 2.0) - (avg_tmdb_rating if avg_tmdb_rating > 0 else 7.0)
+        if diff <= -0.6:
+            critic_icon, critic_title, critic_desc = styles["harsh"]
+        elif diff >= 0.6:
+            critic_icon, critic_title, critic_desc = styles["enthusiast"]
+        else:
+            critic_icon, critic_title, critic_desc = styles["balanced"]
+
+    top_rated_candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    top_rated_movies = [x[2] for x in top_rated_candidates[:6]]
+
     return {
         "persona_icon": persona[0],
         "persona_title": persona[1],
         "persona_desc": persona[2],
         "total_rated": total_rated,
         "total_watchlist": total_watchlist,
+        "total_watched": len(watched_set.union(rated_mids)),
+        "avg_user_rating": avg_user_rating,
+        "avg_tmdb_rating": avg_tmdb_rating,
+        "avg_runtime": avg_runtime,
+        "critic_icon": critic_icon,
+        "critic_title": critic_title,
+        "critic_desc": critic_desc,
+        "top_rated_movies": top_rated_movies,
         "genre_labels": genre_labels,
         "genre_values": genre_values,
         "decade_labels": decade_labels,
