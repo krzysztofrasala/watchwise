@@ -1,5 +1,5 @@
 // v3: purge pages cached before language-aware caching (they could be in a stale UI language)
-const CACHE_NAME = 'watchwise-cache-v3';
+const CACHE_NAME = 'watchwise-cache-v4';
 const LANG_MARKER = '/__ww_lang__';
 const OFFLINE_URL = '/offline/';
 
@@ -12,7 +12,7 @@ const PRECACHE_ASSETS = [
   '/static/icons/icon-512.png',
   '/static/icons/apple-touch-icon.png',
   '/static/vendor/htmx-1.9.10.min.js',
-  'https://unpkg.com/lucide@latest',
+  '/static/vendor/lucide-1.77.0.min.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap'
 ];
 
