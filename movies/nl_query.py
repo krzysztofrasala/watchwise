@@ -285,16 +285,22 @@ def parse_natural_query_gemini(query_text: str, api_key: str) -> dict[str, Any] 
             text = re.sub(r"\s*```$", "", text)
         data = json.loads(text)
         if isinstance(data, dict) and "genre" in data:
-            return {
+            result = {
                 "genre": data.get("genre", "All"),
                 "year_min": data.get("year_min"),
                 "year_max": data.get("year_max"),
                 "vote_min": float(data["vote_min"]) if data.get("vote_min") is not None else None,
                 "sort_by": data.get("sort_by", "vote_desc"),
                 "language": data.get("language"),
-                "understood": True,
                 "ai_explanation": data.get("ai_explanation", ""),
             }
+            # Only "understood" when at least one real filter was extracted; otherwise the view
+            # falls back to a person/title search instead of showing generic top-rated films.
+            result["understood"] = any([
+                result["genre"] not in (None, "", "All"), result["year_min"], result["year_max"],
+                result["vote_min"], result["language"], result["sort_by"] != "vote_desc",
+            ])
+            return result
     except Exception:
         pass
     return None
