@@ -320,7 +320,8 @@ def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") 
                 reason = f"Dla Osoby 2 ({g2})"
 
         vote_avg = float(row.get("vote_average", 0.0) or 0.0)
-        final_score = int(round(score * 0.75 + (vote_avg * 2.5)))
+        quality = float(row.get("weighted_rating") or vote_avg)
+        final_score = int(round(score * 0.75 + (quality * 2.5)))
 
         items.append((final_score, {
             "movie_id": int(row["movie_id"]),

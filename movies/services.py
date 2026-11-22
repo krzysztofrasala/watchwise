@@ -46,6 +46,9 @@ def parse_genres(genres_str) -> list[str]:
         return []
 
 
+WEIGHTED_RATING_MIN_VOTES = 1000  # roughly the 25th percentile of vote counts in the dataset
+
+
 @lru_cache(maxsize=1)
 def load_dataset():
     """Load and merge movie dataset and precomputed similarity matrix."""
@@ -69,7 +72,7 @@ def load_dataset():
     raw_df = raw_df.rename(columns={"id": "movie_id"})
 
     cols_to_merge = ["movie_id", "year", "genres_list"]
-    for col in ["poster_path", "backdrop_path", "vote_average", "runtime", "overview", "tagline", "original_language"]:
+    for col in ["poster_path", "backdrop_path", "vote_average", "vote_count", "popularity", "runtime", "overview", "tagline", "original_language"]:
         if col in raw_df.columns:
             cols_to_merge.append(col)
 
@@ -91,6 +94,18 @@ def load_dataset():
         merged["vote_average"] = 0.0
     else:
         merged["vote_average"] = merged["vote_average"].fillna(0.0).round(1)
+
+    # Bayesian (IMDb-style) weighted rating: films with few votes are pulled towards the mean so that a
+    # 9.4 from 177 votes no longer outranks an 8.7 from 24,000. Raw vote_average is kept for display.
+    if "vote_count" not in merged.columns:
+        merged["vote_count"] = 0
+    merged["vote_count"] = merged["vote_count"].fillna(0).astype(int)
+    rated = merged["vote_average"] > 0
+    mean_rating = float(merged.loc[rated, "vote_average"].mean()) if rated.any() else 0.0
+    votes = merged["vote_count"].astype(float)
+    merged["weighted_rating"] = (
+        (votes * merged["vote_average"] + WEIGHTED_RATING_MIN_VOTES * mean_rating) / (votes + WEIGHTED_RATING_MIN_VOTES)
+    ).round(3)
 
     if "runtime" not in merged.columns:
         merged["runtime"] = 0
@@ -286,7 +301,7 @@ def search_movies(query: str, lang: str = "PL", limit: int = 12):
             tag_mask = tag_mask | tags_lower.str.contains(q_compact, na=False, regex=False)
         existing_ids = {int(r["movie_id"]) for r in local_results}
         tag_matches = movies_df[tag_mask & ~movies_df["movie_id"].isin(existing_ids)].sort_values(
-            by="vote_average", ascending=False
+            by="weighted_rating", ascending=False
         )
         local_results.extend(tag_matches.head(limit - len(local_results)).to_dict(orient="records"))
     lang_upper = (lang or "PL").upper()
@@ -395,9 +410,9 @@ def filter_movies(
     df = movies_df[mask]
 
     if sort_by in ("vote_desc", "rating_desc"):
-        df = df.sort_values(by="vote_average", ascending=False)
+        df = df.sort_values(by="weighted_rating", ascending=False)
     elif sort_by == "vote_asc":
-        df = df.sort_values(by="vote_average", ascending=True)
+        df = df.sort_values(by="weighted_rating", ascending=True)
     elif sort_by == "year_desc":
         df = df.sort_values(by="year", ascending=False)
     elif sort_by == "year_asc":

@@ -660,3 +660,23 @@ class HarmonyScoreTests(TestCase):
         from . import recommender
         self.assertEqual(recommender.get_harmony_score("Horror", "Horror"), 100)
         self.assertLess(recommender.get_harmony_score("Horror", "Romance"), 100)
+
+
+class WeightedRatingTests(TestCase):
+    def test_dataset_has_vote_counts_and_weighted_rating(self):
+        from . import services
+        df, _ = services.load_dataset()
+        self.assertIn("vote_count", df.columns)
+        self.assertIn("weighted_rating", df.columns)
+        self.assertGreater(int(df["vote_count"].max()), 1000)
+
+    def test_top_rated_prefers_well_voted_films(self):
+        from . import services
+        top = services.filter_movies(sort_by="vote_desc", per_page=10)["items"]
+        self.assertGreaterEqual(len(top), 10)
+        # a 9.4 from a handful of votes must not outrank films with thousands of votes
+        self.assertTrue(all(m["vote_count"] >= 1000 for m in top))
+
+    def test_lru_cache_on_load_dataset(self):
+        from . import services
+        self.assertTrue(hasattr(services.load_dataset, "cache_info"))
