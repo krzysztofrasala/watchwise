@@ -864,8 +864,38 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
     return []
 
 
-@_ttl_cached(LIST_CACHE_TTL)
-def search_person_movies(name: str, lang: str = "PL", limit: int = 6) -> tuple[str | None, list[dict]]:
+def _tmdb_get_cached(url: str, params: dict, ttl: int = 3600, timeout: int = 4) -> dict | None:
+    """_tmdb_get with a Django-cache layer keyed on url+params (api_key excluded). Failures are never cached."""
+    safe = {k: v for k, v in params.items() if k != "api_key"}
+    key = "tmdbget_" + hashlib.md5(f"{url}|{sorted(safe.items())}".encode("utf-8")).hexdigest()
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    data = _tmdb_get(url, params, timeout=timeout)
+    if data:
+        cache.set(key, data, ttl)
+    return data
+
+
+TMDB_GENRE_IDS = {
+    "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, "Crime": 80, "Documentary": 99,
+    "Drama": 18, "Family": 10751, "Fantasy": 14, "History": 36, "Horror": 27, "Music": 10402,
+    "Mystery": 9648, "Romance": 10749, "Science Fiction": 878, "TV Movie": 10770, "Thriller": 53,
+    "War": 10752, "Western": 37,
+}
+
+
+def search_person_movies(
+    name: str,
+    lang: str = "PL",
+    limit: int = 6,
+    genre: str | None = None,
+    year_min: int | None = None,
+    year_max: int | None = None,
+    vote_min: float | None = None,
+    language: str | None = None,
+    sort_by: str = "popularity",
+) -> tuple[str | None, list[dict]]:
     """Find a person (actor/director) by name and return (canonical_name, their most popular movies)."""
     if not name or len(name.strip()) < 3:
         return None, []
@@ -875,7 +905,7 @@ def search_person_movies(name: str, lang: str = "PL", limit: int = 6) -> tuple[s
     lang_map = {"PL": "pl-PL", "EN": "en-US", "DE": "de-DE", "ES": "es-ES", "FR": "fr-FR", "IT": "it-IT"}
     tmdb_lang = lang_map.get((lang or "PL").upper(), "pl-PL")
     try:
-        found = _tmdb_get(f"{BASE_URL}/search/person",
+        found = _tmdb_get_cached(f"{BASE_URL}/search/person",
                           {"api_key": api_key, "query": name.strip(), "language": tmdb_lang, "include_adult": False})
         people = (found or {}).get("results") or []
         if not people:
@@ -883,11 +913,35 @@ def search_person_movies(name: str, lang: str = "PL", limit: int = 6) -> tuple[s
         person = max(people[:3], key=lambda p: p.get("popularity") or 0)
         if (person.get("popularity") or 0) < 3:
             return None, []
-        credits = _tmdb_get(f"{BASE_URL}/person/{person['id']}/movie_credits",
+        credits = _tmdb_get_cached(f"{BASE_URL}/person/{person['id']}/movie_credits",
                             {"api_key": api_key, "language": tmdb_lang})
         entries = (credits or {}).get("cast", []) + (credits or {}).get("crew", [])
         entries = [e for e in entries if e.get("poster_path") and (e.get("vote_count") or 0) >= 50 and not e.get("adult")]
-        entries.sort(key=lambda e: e.get("popularity") or 0, reverse=True)
+
+        def _year(e: dict) -> int:
+            d = e.get("release_date") or ""
+            return int(d[:4]) if d[:4].isdigit() else 0
+
+        gid = TMDB_GENRE_IDS.get(genre or "")
+        if gid:
+            entries = [e for e in entries if gid in (e.get("genre_ids") or [])]
+        if year_min:
+            entries = [e for e in entries if _year(e) >= int(year_min)]
+        if year_max:
+            entries = [e for e in entries if 0 < _year(e) <= int(year_max)]
+        if vote_min:
+            entries = [e for e in entries if (e.get("vote_average") or 0) >= float(vote_min)]
+        if language:
+            entries = [e for e in entries if (e.get("original_language") or "").lower() == language.lower()]
+
+        if sort_by == "year_desc":
+            entries.sort(key=_year, reverse=True)
+        elif sort_by == "year_asc":
+            entries.sort(key=_year)
+        elif sort_by == "vote_asc":
+            entries.sort(key=lambda e: e.get("vote_average") or 0)
+        else:
+            entries.sort(key=lambda e: e.get("popularity") or 0, reverse=True)
         items, seen = [], set()
         for e in entries:
             mid = e.get("id")
@@ -913,6 +967,36 @@ def search_person_movies(name: str, lang: str = "PL", limit: int = 6) -> tuple[s
         return None, []
 
 
+def fetch_similar_movies(movie_id: int, lang: str = "PL", limit: int = 6) -> list[dict]:
+    """TMDB recommendations for a movie (fallback when it is not in the local dataset)."""
+    api_key = get_api_key()
+    if not api_key:
+        return []
+    lang_map = {"PL": "pl-PL", "EN": "en-US", "DE": "de-DE", "ES": "es-ES", "FR": "fr-FR", "IT": "it-IT"}
+    data = _tmdb_get(f"{BASE_URL}/movie/{int(movie_id)}/recommendations",
+                     {"api_key": api_key, "language": lang_map.get((lang or "PL").upper(), "pl-PL")})
+    items = []
+    for e in (data or {}).get("results", []):
+        if not e.get("poster_path") or e.get("adult"):
+            continue
+        d = e.get("release_date") or ""
+        items.append({
+            "movie_id": e["id"],
+            "title": e.get("title") or e.get("original_title") or "",
+            "media_type": "movie",
+            "is_tv": False,
+            "year": int(d[:4]) if d[:4].isdigit() else None,
+            "poster_url": get_poster_url(e.get("poster_path")),
+            "backdrop_url": get_backdrop_url(e.get("backdrop_path")),
+            "vote_average": round(float(e.get("vote_average") or 0.0), 1),
+            "overview": e.get("overview", ""),
+        })
+        if len(items) >= limit:
+            break
+    return items
+
+
+@_ttl_cached(LIST_CACHE_TTL)
 def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch trending movies or TV series from TMDB API."""
     api_key = get_api_key()

@@ -17,6 +17,7 @@
         <div class="flex items-center gap-2 flex-wrap text-xs text-gray-400 border-b border-white/10 pb-3">
             <span class="font-bold text-emerald-400">🔍 AI Filtered:</span>
             {% if person_name %}<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[11px] font-bold">🎭 {{ person_name }}</span>{% endif %}
+            {% if similar_to %}<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[11px] font-bold">🎞️ ≈ {{ similar_to }}</span>{% endif %}
             {% if parsed.genre != "All" %}<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[11px] font-bold">{{ parsed.genre }}</span>{% endif %}
             {% if parsed.year_min %}<span class="bg-white/10 text-white px-2 py-0.5 rounded-full text-[11px] font-bold">{{ "from"|t:current_lang }} {{ parsed.year_min }}</span>{% endif %}
             {% if parsed.year_max %}<span class="bg-white/10 text-white px-2 py-0.5 rounded-full text-[11px] font-bold">{{ "to"|t:current_lang }} {{ parsed.year_max }}</span>{% endif %}

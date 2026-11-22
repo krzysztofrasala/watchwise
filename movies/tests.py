@@ -636,3 +636,20 @@ class AssistantSubjectTests(TestCase):
         self.assertEqual(views._assistant_subject("szukam filmu z nicolas cage"), "nicolas cage")
         self.assertEqual(views._assistant_subject("movie with Leonardo DiCaprio"), "Leonardo DiCaprio")
         self.assertEqual(views._assistant_subject("film z brucem willisem"), "brucem willisem")
+
+
+class AssistantParsingTests(TestCase):
+    def test_extract_similar_title(self):
+        from . import nl_query
+        self.assertEqual(nl_query.extract_similar_title("filmy podobne do Incepcji"), "Incepcji")
+        self.assertEqual(nl_query.extract_similar_title("movies like The Matrix"), "The Matrix")
+        self.assertIsNone(nl_query.extract_similar_title("komedia z lat 90"))
+
+    def test_strip_filter_terms_keeps_only_name(self):
+        from . import nl_query
+        self.assertEqual(nl_query.strip_filter_terms("thriller z bruce willis po 2000"), "z bruce willis")
+        self.assertEqual(nl_query.strip_filter_terms("komedia z lat 90"), "z")
+
+    def test_trending_is_cached_decorated(self):
+        from . import tmdb
+        self.assertTrue(hasattr(tmdb.fetch_trending, "__wrapped__"))

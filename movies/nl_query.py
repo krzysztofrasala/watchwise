@@ -314,3 +314,39 @@ def parse_natural_query(query_text: str) -> dict[str, Any]:
         if result:
             return result
     return parse_natural_query_regex(query_text)
+
+
+SIMILAR_RE = re.compile(
+    r"\b(?:podobn\w*\s+(?:do|w\s+stylu)|w\s+stylu|jak|like|similar\s+to|ahnlich\s+wie|\u00e4hnlich\s+wie|"
+    r"similar\s+a|parecid\w*\s+a|comme|semblable\s+a|simile\s+a|come)\s+(.{2,60})$",
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def extract_similar_title(query_text: str) -> str | None:
+    """'filmy podobne do Incepcji' -> 'Incepcji'. Returns None when the query is not a 'similar to' request."""
+    m = SIMILAR_RE.search((query_text or "").strip())
+    if not m:
+        return None
+    title = re.sub(r"\s+", " ", m.group(1)).strip(" .,!?\"'")
+    return title or None
+
+
+def strip_filter_terms(query_text: str) -> str:
+    """Remove genre / language / year / rating / sorting words so only a possible person or title name remains."""
+    q = _normalize(query_text)
+    for stems in GENRE_PATTERNS.values():
+        q = re.sub(r"\b(?:" + "|".join(stems) + r")\w*", " ", q)
+    for stems in LANGUAGE_PATTERNS.values():
+        q = re.sub(r"\b(?:" + "|".join(stems) + r")\w*", " ", q)
+    for pattern, _ in COMPOUND_GENRES:
+        q = re.sub(pattern, " ", q)
+    for pat in (RECENT, CLASSIC, BEST, GOOD, OLDEST, WORST):
+        q = re.sub(pat + r"\w*", " ", q)
+    q = RATING_NUMBER.sub(" ", q)
+    q = RATING_PLUS.sub(" ", q)
+    q = re.sub(rf"\b(?:po|od|do|przed|after|before|since|until|seit|vor|nach|bis|depuis|avant|dopo|prima|desde|antes)\s+(?:de\s+|il\s+|del\s+)?{YEAR}\b", " ", q)
+    q = re.sub(rf"\b{DECADE_MARKER}\s*'?(?:19|20)?\d0\w*", " ", q)
+    q = re.sub(r"\b(?:19|20)?\d0(?:'?s|er|ies|-?tych|-?ych)\b", " ", q)
+    q = re.sub(rf"\b{YEAR}\b", " ", q)
+    return re.sub(r"\s+", " ", q).strip()
