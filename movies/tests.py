@@ -614,20 +614,20 @@ class HardeningTests(TestCase):
         cache.clear()
 
     def test_assistant_rate_limit(self):
-        from . import views
-        for _ in range(views.ASSISTANT_RATE_LIMIT):
+        from .views.assistant import ASSISTANT_RATE_LIMIT
+        for _ in range(ASSISTANT_RATE_LIMIT):
             res = self.client.post("/assistant/chat/", {"message": "   "})
             self.assertEqual(res.status_code, 400)  # empty message, not counted
         # exhaust the counter directly, then the next real request is refused
         from django.core.cache import cache
-        cache.set("rl:assistant:127.0.0.1", views.ASSISTANT_RATE_LIMIT, 3600)
+        cache.set("rl:assistant:127.0.0.1", ASSISTANT_RATE_LIMIT, 3600)
         res = self.client.post("/assistant/chat/", {"message": "komedia"})
         self.assertEqual(res.status_code, 429)
 
     def test_import_rejects_oversized_file(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
-        from . import views
-        big = SimpleUploadedFile("p.json", b"x" * (views.IMPORT_MAX_BYTES + 1))
+        from .views.preferences import IMPORT_MAX_BYTES
+        big = SimpleUploadedFile("p.json", b"x" * (IMPORT_MAX_BYTES + 1))
         res = self.client.post("/profile/import/", {"profile_file": big})
         self.assertEqual(res.status_code, 413)
 
@@ -637,10 +637,10 @@ class HardeningTests(TestCase):
 
 class AssistantSubjectTests(TestCase):
     def test_subject_extraction_strips_filler_words(self):
-        from . import views
-        self.assertEqual(views._assistant_subject("szukam filmu z nicolas cage"), "nicolas cage")
-        self.assertEqual(views._assistant_subject("movie with Leonardo DiCaprio"), "Leonardo DiCaprio")
-        self.assertEqual(views._assistant_subject("film z brucem willisem"), "brucem willisem")
+        from .views.assistant import _assistant_subject
+        self.assertEqual(_assistant_subject("szukam filmu z nicolas cage"), "nicolas cage")
+        self.assertEqual(_assistant_subject("movie with Leonardo DiCaprio"), "Leonardo DiCaprio")
+        self.assertEqual(_assistant_subject("film z brucem willisem"), "brucem willisem")
 
 
 class AssistantParsingTests(TestCase):

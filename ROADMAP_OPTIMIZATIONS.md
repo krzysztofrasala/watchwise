@@ -44,7 +44,7 @@ Wszystkie zidentyfikowane wąskie gardła i braki zostały pomyślnie rozwiązan
 - ✅ Zaimplementowano `get_session()` z `HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=3)`.
 
 ### 4. Równoległe pobieranie danych w Watchliście
-- **Plik:** [`movies/views.py`](file:///Users/krzysztofrasala/Developer/projects/github/cinescope-django/movies/views.py)
+- **Plik:** [`movies/views/watchlist.py`](file:///Users/krzysztofrasala/Developer/projects/github/cinescope-django/movies/views/watchlist.py)
 - ✅ Zastosowano `concurrent.futures.ThreadPoolExecutor(max_workers=8)` do równoległego odpytywania TMDB.
 
 ---
