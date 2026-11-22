@@ -653,3 +653,10 @@ class AssistantParsingTests(TestCase):
     def test_trending_is_cached_decorated(self):
         from . import tmdb
         self.assertTrue(hasattr(tmdb.fetch_trending, "__wrapped__"))
+
+
+class HarmonyScoreTests(TestCase):
+    def test_identical_genres_give_full_harmony(self):
+        from . import recommender
+        self.assertEqual(recommender.get_harmony_score("Horror", "Horror"), 100)
+        self.assertLess(recommender.get_harmony_score("Horror", "Romance"), 100)

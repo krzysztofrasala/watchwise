@@ -244,7 +244,7 @@ def get_harmony_score(g1: str, g2: str) -> int:
     if not g1 or not g2 or g1 == "All" or g2 == "All":
         return 85
     if g1 == g2:
-        return 96
+        return 100
     g1_lower, g2_lower = g1.lower(), g2.lower()
     pair = {g1_lower, g2_lower}
     if pair in [{'action', 'science fiction'}, {'action', 'adventure'}, {'comedy', 'romance'}, {'thriller', 'mystery'}, {'horror', 'thriller'}, {'action', 'thriller'}]:
