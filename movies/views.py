@@ -8,14 +8,19 @@ from django.core.cache import cache
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
+from django.utils.http import url_has_allowed_host_and_scheme
 from . import services, tmdb, recommender, taste, nl_query, profiles, i18n
+from .middleware import LANG_COOKIE
 
 
 def prepare_movie_item(item: dict, lang: str = "PL") -> dict:
     lang_upper = (lang or "PL").upper()
     lang_lower = lang_upper.lower()
+    localize_catalog_item(item, lang)
 
-    if lang_upper == "PL":
+    if item.get("_localized"):
+        pass  # title/overview/tagline/poster already come from TMDB in the UI language
+    elif lang_upper == "PL":
         if item.get("overview_pl"):
             item["overview"] = item["overview_pl"]
         if item.get("title_pl"):
@@ -23,7 +28,7 @@ def prepare_movie_item(item: dict, lang: str = "PL") -> dict:
         if item.get("tagline_pl"):
             item["tagline"] = item["tagline_pl"]
     else:
-        # Non-PL languages (EN, DE, ES, FR, IT)
+        # Non-PL languages (EN, DE, ES, FR, IT, UK)
         if item.get(f"overview_{lang_lower}"):
             item["overview"] = item[f"overview_{lang_lower}"]
         elif item.get("overview_en"):
@@ -101,9 +106,44 @@ def enrich_movie_with_user_vod(item: dict, my_subs=None):
     return item
 
 
+def localize_catalog_item(item: dict, lang: str) -> dict:
+    """Catalog (dataset) items only have one language: pull title/overview/poster in the UI language from TMDB."""
+    if (lang or "PL").upper() == "PL" or item.get("_localized") or "title_en" not in item:
+        return item  # PL = dataset language; items without title_en already came from TMDB in `lang`
+    basics = tmdb.fetch_localized_basics(item.get("movie_id"), lang=lang, media_type=item.get("media_type"))
+    if not basics:
+        return item
+    for key in ("title", "overview", "tagline", "poster_path", "backdrop_path"):
+        if basics.get(key):
+            item[key] = basics[key]
+    if basics.get("overview"):
+        item["_overview_localized"] = True  # otherwise the (Polish) dataset text is machine-translated later
+    elif basics.get("_overview_fallback"):
+        item["overview"] = basics["_overview_fallback"]  # English source translates better than the Polish dataset text
+    if not basics.get("tagline"):
+        item["tagline"] = ""
+    item["_localized"] = True
+    # prepare_movie_item may already have derived these from the dataset values
+    item["poster_url"] = tmdb.get_poster_url(item.get("poster_path"))
+    item["backdrop_url"] = tmdb.get_backdrop_url(item.get("backdrop_path"))
+    if item.get("title"):
+        item["justwatch_url"] = tmdb.get_justwatch_url(item["title"], lang=lang)
+    return item
+
+
+def warm_localized(items, lang: str) -> None:
+    """Localize a list of catalog items in parallel so the per-item calls that follow are cache hits."""
+    todo = [it for it in (items or []) if isinstance(it, dict) and not it.get("_localized")]
+    if (lang or "PL").upper() == "PL" or not todo:
+        return
+    with ThreadPoolExecutor(max_workers=min(len(todo), 8)) as executor:
+        list(executor.map(lambda it: localize_catalog_item(it, lang), todo))
+
+
 def attach_vod(item: dict, lang: str, my_subs=None) -> dict:
     """Attach cached VOD availability to a list item and match it against the user's subscriptions."""
     mid = item.get("movie_id")
+    localize_catalog_item(item, lang)
     if mid:
         info = tmdb.fetch_vod_info(mid, lang=lang, media_type=item.get("media_type"), title=item.get("title") or "")
         item["vod_flatrate"] = info.get("vod_flatrate", [])
@@ -160,6 +200,7 @@ def index(request):
     genres = services.get_all_genres()
     filtered = services.filter_movies(genre="All", sort_by="vote_desc", per_page=24, lang=lang)
 
+    warm_localized(filtered["items"], lang)
     for item in filtered["items"]:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -183,7 +224,7 @@ def index(request):
                     hero_movie[k] = v
         enrich_movie_with_user_vod(hero_movie, my_subs)
         lang_upper = (lang or "PL").upper()
-        if lang_upper in ["ES", "DE", "FR", "IT"]:
+        if lang_upper in i18n.MACHINE_TRANSLATED_LANGS:
             from . import translator
             if hero_movie.get("overview"):
                 hero_movie["overview"] = translator.translate_text(hero_movie["overview"], target_lang=lang_upper)
@@ -197,12 +238,14 @@ def index(request):
         lang=lang,
         watched_ids=watched_ids,
     )
+    warm_localized(recommended_movies, lang)
     for rec in recommended_movies:
         prepare_movie_item(rec, lang=lang)
         rec["user_rating"] = ratings.get(rec["movie_id"], 0)
         enrich_movie_with_user_vod(rec, my_subs)
 
     trending_items = services.get_trending_content(category="movies", lang=lang)
+    warm_localized(trending_items, lang)
     for item in trending_items:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -265,6 +308,7 @@ def trending_partial(request):
                         break
 
         ratings = profiles.get_active_ratings(request.session)
+        warm_localized(my_vod_items, lang)
         for item in my_vod_items:
             prepare_movie_item(item, lang=lang)
             item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -279,6 +323,7 @@ def trending_partial(request):
 
     trending_items = services.get_trending_content(category=category, lang=lang)
     ratings = profiles.get_active_ratings(request.session)
+    warm_localized(trending_items, lang)
     for item in trending_items:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -329,6 +374,7 @@ def movie_grid_partial(request):
         cands = attach_vod_parallel(cands, lang, target_pids)
 
         matched_items = [m for m in cands if m.get("is_available_on_my_vod")]
+        warm_localized(matched_items, lang)
         for item in matched_items:
             prepare_movie_item(item, lang=lang)
             item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -358,6 +404,7 @@ def movie_grid_partial(request):
 
     filtered["items"] = attach_vod_parallel(filtered["items"], lang, my_subs)
 
+    warm_localized(filtered["items"], lang)
     for item in filtered["items"]:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -382,6 +429,7 @@ def search_live_partial(request):
     results = services.search_movies(query, lang=lang, limit=8)
     ratings = profiles.get_active_ratings(request.session)
 
+    warm_localized(results, lang)
     for item in results:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -426,9 +474,9 @@ def movie_modal_partial(request, movie_id):
             for k, v in offline.items():
                 movie[k] = v
 
-    # Translate overview & tagline for foreign languages (ES, DE, FR, IT)
+    # Translate overview & tagline for foreign languages (ES, DE, FR, IT, UK)
     lang_upper = (lang or "PL").upper()
-    if lang_upper in ["ES", "DE", "FR", "IT"]:
+    if lang_upper in i18n.MACHINE_TRANSLATED_LANGS and not movie.get("_overview_localized"):
         from . import translator
         if movie.get("overview"):
             movie["overview"] = translator.translate_text(movie["overview"], target_lang=lang_upper)
@@ -442,6 +490,7 @@ def movie_modal_partial(request, movie_id):
         movie["justwatch_url"] = tmdb.get_justwatch_url(movie["title"], lang=lang)
 
     recommendations = services.get_recommendations(movie_id, top_n=8, lang=lang)
+    warm_localized(recommendations, lang)
     for rec in recommendations:
         prepare_movie_item(rec, lang=lang)
 
@@ -670,9 +719,9 @@ def roulette_spin_partial(request):
             winner["primary_vod_logo"] = None
             winner["primary_vod_url"] = None
 
-        # Translate overview & tagline for foreign languages (ES, DE, FR, IT)
+        # Translate overview & tagline for foreign languages (ES, DE, FR, IT, UK)
         lang_upper = (lang or "PL").upper()
-        if lang_upper in ["ES", "DE", "FR", "IT"]:
+        if lang_upper in i18n.MACHINE_TRANSLATED_LANGS and not winner.get("_overview_localized"):
             from . import translator
             if winner.get("overview"):
                 winner["overview"] = translator.translate_text(winner["overview"], target_lang=lang_upper)
@@ -695,6 +744,7 @@ def roulette_spin_partial(request):
 
     # Ensure winner is part of reel
     prepared_teasers = []
+    warm_localized(teaser_pool, lang)
     for item in teaser_pool:
         prepare_movie_item(item, lang=lang)
         prepared_teasers.append(item)
@@ -1123,6 +1173,7 @@ def discover(request):
     filtered["items"] = attach_vod_parallel(filtered["items"], lang, my_subs)
 
     ratings = profiles.get_active_ratings(request.session)
+    warm_localized(filtered["items"], lang)
     for item in filtered["items"]:
         prepare_movie_item(item, lang=lang)
         item["user_rating"] = ratings.get(item["movie_id"], 0)
@@ -1231,6 +1282,7 @@ def compare(request):
     else:
         harmony_score = recommender.get_harmony_score(vibe1, vibe2)
 
+    warm_localized(recommendations, lang)
     for rec in recommendations:
         prepare_movie_item(rec, lang=lang)
 
@@ -1394,6 +1446,7 @@ def assistant_chat_partial(request):
 
     not_found = not results
 
+    warm_localized(results, lang)
     for item in results:
         prepare_movie_item(item, lang=lang)
 
@@ -1435,8 +1488,14 @@ def delete_profile_view(request):
 @require_POST
 def switch_language(request):
     lang_code = request.POST.get("lang", "PL").strip()
-    i18n.set_lang(request.session, lang_code)
-    return redirect(request.META.get("HTTP_REFERER", "/"))
+    code = i18n.set_lang(request.session, lang_code)
+    target = request.META.get("HTTP_REFERER", "/")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        target = "/"
+    response = redirect(target)
+    # Readable by JS so already-open pages/tabs/bfcache entries can detect a stale language and reload.
+    response.set_cookie(LANG_COOKIE, code, max_age=60 * 60 * 24 * 365, samesite="Lax")
+    return response
 
 
 def export_profile(request):

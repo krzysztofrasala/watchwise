@@ -19,7 +19,7 @@ class MoviesViewTestCase(TestCase):
     def test_discover_view(self):
         response = self.client.get(reverse('discover'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Discover Pro")
+        self.assertContains(response, "Wyszukiwarka Pro")
 
     def test_taste_dna_view(self):
         response = self.client.get(reverse('taste_dna'))
@@ -29,7 +29,7 @@ class MoviesViewTestCase(TestCase):
     def test_compare_view(self):
         response = self.client.get(reverse('compare'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Matchmaker")
+        self.assertContains(response, "Wspólny seans")
 
     def test_assistant_view(self):
         response = self.client.get(reverse('assistant'))
@@ -685,3 +685,100 @@ class WeightedRatingTests(TestCase):
     def test_lru_cache_on_load_dataset(self):
         from . import services
         self.assertTrue(hasattr(services.load_dataset, "cache_info"))
+
+
+class UkrainianLanguageTests(TestCase):
+    PAGES = ["index", "discover", "roulette", "compare", "taste_dna", "watchlist", "assistant", "offline"]
+
+    def test_all_keys_translated(self):
+        from . import i18n
+        missing = set(i18n.TRANSLATIONS["EN"]) - set(i18n.TRANSLATIONS["UK"])
+        self.assertFalse(missing, f"UK is missing keys: {sorted(missing)}")
+
+    def test_switch_to_uk_sets_session_cookie_and_renders_ukrainian(self):
+        resp = self.client.post(reverse("switch_language"), {"lang": "UK"})
+        self.assertEqual(self.client.session["lang"], "UK")
+        self.assertEqual(resp.cookies["ww_lang"].value, "UK")
+        page = self.client.get(reverse("index"))
+        self.assertContains(page, '<html lang="uk"')
+        self.assertContains(page, "Відкрити")
+        self.assertNotContains(page, "Odkrywaj")
+
+    def test_no_stale_language_after_switching_back_and_forth(self):
+        for code, marker, foreign in [("UK", "Рулетка", "Ruletka"), ("PL", "Ruletka", "Рулетка"),
+                                      ("DE", "Roulette", "Рулетка"), ("UK", "Рулетка", "Roulette")]:
+            self.client.post(reverse("switch_language"), {"lang": code})
+            for name in self.PAGES:
+                page = self.client.get(reverse(name))
+                self.assertEqual(page.status_code, 200, name)
+                self.assertEqual(page["X-App-Lang"], code)
+                self.assertIn("no-cache", page["Cache-Control"])
+                self.assertIn("Cookie", page["Vary"])
+                self.assertContains(page, f'<html lang="{code.lower()}"')
+            home = self.client.get(reverse("index"))
+            self.assertContains(home, marker)
+            self.assertNotContains(home, foreign)
+
+    def test_uk_never_falls_back_to_polish_strings(self):
+        from . import taste, recommender
+        self.assertEqual(taste.assign_persona({}, lang="UK")[1], "Знавець кіно")
+        recs = recommender.recommend_for_vibes("Comedy", "Drama", top_n=3, lang="UK")
+        self.assertTrue(recs)
+        for r in recs:
+            self.assertRegex(r["match_reason"], r"[А-Яа-яІіЇїЄє]")
+
+    def test_tmdb_locale_and_translation_target(self):
+        from . import i18n, tmdb
+        self.assertEqual(i18n.lang_cfg("UK", "tmdb"), "uk-UA")
+        self.assertIn("/ua/", tmdb.get_justwatch_url("Test", lang="UK"))
+        self.assertIn("UK", i18n.MACHINE_TRANSLATED_LANGS)
+
+    def test_switch_language_ignores_foreign_redirect(self):
+        resp = self.client.post(reverse("switch_language"), {"lang": "UK"}, HTTP_REFERER="https://evil.example/x")
+        self.assertEqual(resp["Location"], "/")
+
+
+class TitleFallbackTests(TestCase):
+    def test_untranslated_title_detection(self):
+        from . import tmdb
+        zh = {"title": "斗破苍穹", "original_title": "斗破苍穹", "original_language": "zh"}
+        self.assertTrue(tmdb._needs_title_fallback(zh, "UK"))
+        self.assertFalse(tmdb._needs_title_fallback(zh, "EN"))
+        translated = {"title": "Месники", "original_title": "Avengers", "original_language": "en"}
+        self.assertFalse(tmdb._needs_title_fallback(translated, "UK"))
+        native = {"title": "Зведенята", "original_title": "Зведенята", "original_language": "uk"}
+        self.assertFalse(tmdb._needs_title_fallback(native, "UK"))
+
+    def test_apply_fallback_uses_english_basics(self):
+        from unittest import mock
+        from . import tmdb
+        items = [{"movie_id": 1, "title": "斗破苍穹", "overview": "", "_fb": True},
+                 {"movie_id": 2, "title": "Ok", "overview": "x"}]
+        with mock.patch.object(tmdb, "fetch_localized_basics", return_value={"title": "Battle", "overview": "Eng"}):
+            out = tmdb.apply_title_fallback(items, "UK")
+        self.assertEqual(out[0]["title"], "Battle")
+        self.assertEqual(out[0]["overview"], "Eng")
+        self.assertEqual(out[1]["title"], "Ok")
+        self.assertNotIn("_fb", out[0])
+
+
+class NoRawKeysTests(TestCase):
+    def test_no_untranslated_keys_or_hardcoded_english_in_uk(self):
+        import re
+        for code in ("PL", "EN", "DE", "ES", "FR", "IT", "UK"):
+            self.client.post(reverse("switch_language"), {"lang": code})
+            for name in ("index", "discover", "roulette", "compare", "taste_dna", "watchlist", "assistant", "offline"):
+                html = self.client.get(reverse(name)).content.decode()
+                raw = re.findall(r">\s*([a-z]+(?:_[a-z0-9]+)+)\s*<", html)
+                self.assertFalse(raw, f"{code}/{name}: raw translation keys {raw}")
+        self.client.post(reverse("switch_language"), {"lang": "UK"})
+        html = self.client.get(reverse("assistant")).content.decode()
+        for english in ("Quick Suggestions", "NLP v2.0 Active", "Data & trailers via", ">Taste DNA<", ">Matchmaker<", ">Discover Pro<"):
+            self.assertNotIn(english, html)
+
+
+    def test_feature_names_are_localized_in_every_non_english_language(self):
+        from . import i18n
+        for code in ("PL", "DE", "ES", "FR", "IT", "UK"):
+            for key in ("nav_discover_pro", "nav_taste_dna", "nav_matchmaker"):
+                self.assertNotEqual(i18n.t(key, code), i18n.t(key, "EN"), f"{code}/{key} still English")

@@ -163,6 +163,8 @@ def recommend_for_user(
                 row_dict["match_reason"] = f"Correspond à vos goûts en {genre_str}"
             elif code == "IT":
                 row_dict["match_reason"] = f"Corrisponde ai tuoi gusti in {genre_str}"
+            elif code == "UK":
+                row_dict["match_reason"] = f"Збігається з вашим смаком: {genre_str}"
             else:
                 row_dict["match_reason"] = f"Dopasowane do gatunków: {genre_str}"
         else:
@@ -176,6 +178,8 @@ def recommend_for_user(
                 row_dict["match_reason"] = "Correspond à votre profil cinéma"
             elif code == "IT":
                 row_dict["match_reason"] = "In linea con il tuo profilo cinema"
+            elif code == "UK":
+                row_dict["match_reason"] = "Відповідає вашому кіно-профілю"
             else:
                 row_dict["match_reason"] = "Zgodne z Twoim ogólnym gustem filmowym"
 
@@ -232,6 +236,8 @@ def recommend_for_group(
                 m_copy["match_reason"] = f"Convient aux deux ({joint_score}%)"
             elif code == "IT":
                 m_copy["match_reason"] = f"Perfetto per entrambi ({joint_score}%)"
+            elif code == "UK":
+                m_copy["match_reason"] = f"Підходить обом ({joint_score}%)"
             else:
                 m_copy["match_reason"] = f"Dopasowanie dla 2 osób ({joint_score}%)"
             combined.append((joint_score, m_copy))
@@ -288,6 +294,8 @@ def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") 
                 reason = f"Compromis : combine {g1} et {g2}"
             elif code == "IT":
                 reason = f"Compromesso: combina {g1} e {g2}"
+            elif code == "UK":
+                reason = f"Компроміс: поєднує {g1} та {g2}"
             else:
                 reason = f"Kompromis: łączy {g1} & {g2}"
         elif match1:
@@ -302,6 +310,8 @@ def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") 
                 reason = f"Pour Personne 1 ({g1})"
             elif code == "IT":
                 reason = f"Per Persona 1 ({g1})"
+            elif code == "UK":
+                reason = f"Для особи 1 ({g1})"
             else:
                 reason = f"Dla Osoby 1 ({g1})"
         else:
@@ -316,6 +326,8 @@ def recommend_for_vibes(g1: str, g2: str, top_n: int = TOP_N, lang: str = "PL") 
                 reason = f"Pour Personne 2 ({g2})"
             elif code == "IT":
                 reason = f"Per Persona 2 ({g2})"
+            elif code == "UK":
+                reason = f"Для особи 2 ({g2})"
             else:
                 reason = f"Dla Osoby 2 ({g2})"
 

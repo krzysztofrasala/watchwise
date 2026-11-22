@@ -42,6 +42,12 @@ CRITIC_STYLES = {
         "balanced": ("⚖️", "Cinefilo Equilibrato", "I tuoi voti sono in perfetto equilibrio con il pubblico globale."),
         "unrated": ("🍿", "Esploratore", "Valuta alcuni film per scoprire il tuo stile di critica."),
     },
+    "UK": {
+        "harsh": ("🧐", "Суворий критик", "Ви оцінюєте фільми суворіше за світове середнє TMDB — п'ять зірок у вас треба заслужити."),
+        "enthusiast": ("🤩", "Кіноентузіаст", "Ви щиро насолоджуєтесь переглядом і оцінюєте фільми вище за світове середнє TMDB."),
+        "balanced": ("⚖️", "Врівноважений кіноман", "Ваші оцінки в ідеальній гармонії зі світовими оцінками критиків і глядачів."),
+        "unrated": ("🍿", "Дослідник", "Оцініть кілька фільмів зірками, щоб відкрити свій стиль оцінювання."),
+    },
 }
 
 PERSONAS = {
@@ -134,7 +140,22 @@ PERSONAS = {
         (["History", "Drama"], ("📜", "Viaggiatore nel Tempo", "Scopri la storia attraverso i drammi storici.")),
         (["Adventure", "Fantasy"], ("⚔️", "Il Sognatore Epico", "Il tuo elemento sono le grandi avventure e la magia.")),
         (["Drama"], ("🎭", "Il Pensatore", "Ogni film è una finestra sulla natura umana.")),
-    ]
+    ],
+    "UK": [
+        (["Horror", "Thriller"], ("🌑", "Темний розум", "Ви обожнюєте психологічну напругу та похмурі історії з несподіваними поворотами.")),
+        (["Action", "Thriller"], ("🎯", "Мисливець за адреналіном", "Ніщо не розганяє вам кров так, як видовищний екшн і погоні.")),
+        (["Drama", "Romance"], ("🌹", "Невиліковний романтик", "Ви вірите, що кожна велика історія має кохання в центрі.")),
+        (["Science Fiction", "Action"], ("🚀", "Мандрівник у майбутнє", "Ви сміливо йдете туди, де ще не бував жоден фільм.")),
+        (["Crime", "Drama"], ("🕵️", "Шукач правди", "Вас захоплюють темні таємниці та ціна людських рішень.")),
+        (["Animation", "Family"], ("🎠", "Вічна дитина", "Ви молоді душею та цінуєте магію й уяву в будь-якому віці.")),
+        (["Comedy"], ("😂", "Любитель сміху", "Життя надто коротке, щоб сприймати його занадто серйозно.")),
+        (["Science Fiction"], ("🛸", "Візіонер", "Вас захоплює те, що могло б бути, а не лише те, що є.")),
+        (["Horror"], ("👻", "Мисливець за дрижаками", "Страх у кіно — це чиста насолода.")),
+        (["Action", "Adventure"], ("💥", "Фанат епічного кіно", "Більше, гучніше, швидше — видовище понад усе.")),
+        (["History", "Drama"], ("📜", "Мандрівник у часі", "Ви пізнаєте сучасність через історичні драми та минулі епохи.")),
+        (["Adventure", "Fantasy"], ("⚔️", "Мрійник", "Ваша стихія — епічні походи, магія та незвичайні світи.")),
+        (["Drama"], ("🎭", "Глибокий мислитель", "Кожен фільм для вас — вікно у складність людської природи.")),
+    ],
 }
 
 FALLBACK_PERSONA = {
@@ -143,7 +164,8 @@ FALLBACK_PERSONA = {
     "DE": ("🎬", "Der Filmkenner", "Ein wahrer Cineast mit vielseitigem Geschmack."),
     "ES": ("🎬", "El Cinefilo", "Un verdadero cinéfilo de gusto ecléctico y abierto."),
     "FR": ("🎬", "Le Cinéphile", "Un vrai passionné de cinéma au goût éclectique."),
-    "IT": ("🎬", "Il Cinefilo", "Un vero appassionato di cinema con un gusto eclettico.")
+    "IT": ("🎬", "Il Cinefilo", "Un vero appassionato di cinema con un gusto eclettico."),
+    "UK": ("🎬", "Знавець кіно", "Справжній кіноман із різнобарвним і відкритим смаком."),
 }
 
 

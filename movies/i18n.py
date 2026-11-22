@@ -1,7 +1,9 @@
-"""Internationalization (i18n) translation dictionary for PL, EN, DE, ES, FR, IT in Cinescope Django."""
+"""Internationalization (i18n) translation dictionary for PL, EN, DE, ES, FR, IT, UK in Cinescope Django."""
 
 from __future__ import annotations
 from typing import Any
+
+from .i18n_uk import UK_TRANSLATIONS
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "PL": {
@@ -1509,9 +1511,80 @@ for _lang_code, _extra_dict in EXTRA_TRANSLATIONS.items():
     if _lang_code in TRANSLATIONS:
         TRANSLATIONS[_lang_code].update(_extra_dict)
 
+TRANSLATIONS["UK"] = dict(UK_TRANSLATIONS)
+
+# UI chrome strings that used to be hard-coded in templates (or missing, so the raw key was shown).
+CHROME_TRANSLATIONS = {
+    "PL": {"navigation_header": "Nawigacja", "profile_header": "Profil", "watchlist_count": "Na watchliście",
+           "live_tmdb": "NA ŻYWO · TMDB", "data_trailers_via": "Dane i zwiastuny z", "nlp_active": "NLP v2.0 aktywne",
+           "quick_suggestions": "⚡ Szybkie podpowiedzi:", "vod_label": "VOD:"},
+    "EN": {"navigation_header": "Navigation", "profile_header": "Profile", "watchlist_count": "In watchlist",
+           "live_tmdb": "LIVE TMDB", "data_trailers_via": "Data & trailers via", "nlp_active": "NLP v2.0 Active",
+           "quick_suggestions": "⚡ Quick Suggestions:", "vod_label": "VOD:"},
+    "DE": {"navigation_header": "Navigation", "profile_header": "Profil", "watchlist_count": "Auf der Merkliste",
+           "live_tmdb": "LIVE · TMDB", "data_trailers_via": "Daten & Trailer von", "nlp_active": "NLP v2.0 aktiv",
+           "quick_suggestions": "⚡ Schnellvorschläge:", "vod_label": "VOD:"},
+    "ES": {"navigation_header": "Navegación", "profile_header": "Perfil", "watchlist_count": "En tu lista",
+           "live_tmdb": "EN VIVO · TMDB", "data_trailers_via": "Datos y tráileres de", "nlp_active": "NLP v2.0 activo",
+           "quick_suggestions": "⚡ Sugerencias rápidas:", "vod_label": "VOD:"},
+    "FR": {"navigation_header": "Navigation", "profile_header": "Profil", "watchlist_count": "Dans la liste",
+           "live_tmdb": "EN DIRECT · TMDB", "data_trailers_via": "Données et bandes-annonces via", "nlp_active": "NLP v2.0 actif",
+           "quick_suggestions": "⚡ Suggestions rapides :", "vod_label": "VOD :"},
+    "IT": {"navigation_header": "Navigazione", "profile_header": "Profilo", "watchlist_count": "Nella lista",
+           "live_tmdb": "LIVE · TMDB", "data_trailers_via": "Dati e trailer da", "nlp_active": "NLP v2.0 attivo",
+           "quick_suggestions": "⚡ Suggerimenti rapidi:", "vod_label": "VOD:"},
+    "UK": {"navigation_header": "Навігація", "profile_header": "Профіль", "watchlist_count": "У списку",
+           "live_tmdb": "НАЖИВО · TMDB", "data_trailers_via": "Дані та трейлери від", "nlp_active": "NLP v2.0 активний",
+           "quick_suggestions": "⚡ Швидкі підказки:", "vod_label": "VOD:",
+           # product names: translated for UK (the other languages keep the brand names)
+           "nav_discover_pro": "Розширений пошук", "nav_taste_dna": "ДНК смаку", "nav_matchmaker": "Підбір для двох",
+           "matchmaker_badge": "ПІДБІР ФІЛЬМУ 2.0"},
+}
+for _c, _d in CHROME_TRANSLATIONS.items():
+    TRANSLATIONS[_c].update(_d)
+
+# Feature/product names are localized per language too (EN keeps the original English names).
+FEATURE_NAMES = {
+    "PL": {"nav_discover_pro": "Wyszukiwarka Pro", "nav_taste_dna": "DNA gustu", "nav_matchmaker": "Wspólny seans",
+           "search_btn": "Szukaj w Wyszukiwarce Pro", "taste_dna_title": "Twój filmowy profil — DNA gustu",
+           "ai_assistant_title": "Filmowy asystent AI"},
+    "DE": {"nav_discover_pro": "Profi-Suche", "nav_taste_dna": "Geschmacks-DNA", "nav_matchmaker": "Gemeinsam schauen",
+           "search_btn": "In der Profi-Suche suchen", "taste_dna_title": "Dein Filmprofil — Geschmacks-DNA",
+           "nav_assistant": "KI-Assistent", "ai_assistant_title": "KI-Filmassistent"},
+    "ES": {"nav_discover_pro": "Búsqueda Pro", "nav_taste_dna": "ADN de gustos", "nav_matchmaker": "Cine en pareja",
+           "search_btn": "Buscar en Búsqueda Pro", "taste_dna_title": "Tu perfil de cine — ADN de gustos"},
+    "FR": {"nav_discover_pro": "Recherche Pro", "nav_taste_dna": "ADN de goûts", "nav_matchmaker": "Séance en duo",
+           "search_btn": "Lancer la Recherche Pro", "taste_dna_title": "Votre profil cinéma — ADN de goûts"},
+    "IT": {"nav_discover_pro": "Ricerca Pro", "nav_taste_dna": "DNA dei gusti", "nav_matchmaker": "Cinema in coppia",
+           "search_btn": "Cerca nella Ricerca Pro", "taste_dna_title": "Il tuo profilo cinema — DNA dei gusti"},
+    "UK": {"search_btn": "Шукати в розширеному пошуку", "taste_dna_title": "Ваш кіно-профіль — ДНК смаку"},
+}
+for _c, _d in FEATURE_NAMES.items():
+    TRANSLATIONS[_c].update(_d)
+
+# Single source of truth for per-language settings (TMDB locale, watch-provider region, JustWatch region).
+# Add a new UI language here + in TRANSLATIONS and every TMDB-facing helper picks it up.
+LANG_CONFIG: dict[str, dict[str, str]] = {
+    "PL": {"tmdb": "pl-PL", "region": "PL", "justwatch": "pl"},
+    "EN": {"tmdb": "en-US", "region": "US", "justwatch": "us"},
+    "DE": {"tmdb": "de-DE", "region": "DE", "justwatch": "de"},
+    "ES": {"tmdb": "es-ES", "region": "ES", "justwatch": "es"},
+    "FR": {"tmdb": "fr-FR", "region": "FR", "justwatch": "fr"},
+    "IT": {"tmdb": "it-IT", "region": "IT", "justwatch": "it"},
+    "UK": {"tmdb": "uk-UA", "region": "UA", "justwatch": "ua"},
+}
+
+# Languages whose overview/tagline are NOT in the local dataset and need machine translation.
+MACHINE_TRANSLATED_LANGS = ("ES", "DE", "FR", "IT", "UK")
+
+
+def lang_cfg(lang: str | None, key: str) -> str:
+    code = (lang or "PL").upper().strip()
+    return LANG_CONFIG.get(code, LANG_CONFIG["PL"])[key]
+
 
 def get_lang(session: dict[str, Any]) -> str:
-    """Return active language code e.g. 'PL', 'EN', 'DE', 'ES', 'FR', 'IT'."""
+    """Return active language code e.g. 'PL', 'EN', 'DE', 'ES', 'FR', 'IT', 'UK'."""
     return session.get("lang", "PL")
 
 
@@ -1538,3 +1611,39 @@ def t(key: str, lang: str = "PL") -> str:
 
     pl_dict = TRANSLATIONS.get("PL", {})
     return pl_dict.get(key, key)
+
+
+# Genre names in the dataset are TMDB's English names; forms keep sending those as values,
+# only the visible label is translated.
+GENRE_NAMES: dict[str, dict[str, str]] = {
+    "PL": {"Action": "Akcja", "Adventure": "Przygodowy", "Animation": "Animacja", "Comedy": "Komedia", "Crime": "Kryminał",
+           "Documentary": "Dokumentalny", "Drama": "Dramat", "Family": "Familijny", "Fantasy": "Fantasy", "History": "Historyczny",
+           "Horror": "Horror", "Music": "Muzyczny", "Mystery": "Tajemnica", "Romance": "Romans", "Science Fiction": "Sci-Fi",
+           "TV Movie": "Film TV", "Thriller": "Thriller", "War": "Wojenny", "Western": "Western"},
+    "DE": {"Action": "Action", "Adventure": "Abenteuer", "Animation": "Animation", "Comedy": "Komödie", "Crime": "Krimi",
+           "Documentary": "Dokumentarfilm", "Drama": "Drama", "Family": "Familie", "Fantasy": "Fantasy", "History": "Historie",
+           "Horror": "Horror", "Music": "Musik", "Mystery": "Mystery", "Romance": "Liebesfilm", "Science Fiction": "Science-Fiction",
+           "TV Movie": "TV-Film", "Thriller": "Thriller", "War": "Kriegsfilm", "Western": "Western"},
+    "ES": {"Action": "Acción", "Adventure": "Aventura", "Animation": "Animación", "Comedy": "Comedia", "Crime": "Crimen",
+           "Documentary": "Documental", "Drama": "Drama", "Family": "Familia", "Fantasy": "Fantasía", "History": "Historia",
+           "Horror": "Terror", "Music": "Música", "Mystery": "Misterio", "Romance": "Romance", "Science Fiction": "Ciencia ficción",
+           "TV Movie": "Película de TV", "Thriller": "Suspense", "War": "Bélica", "Western": "Western"},
+    "FR": {"Action": "Action", "Adventure": "Aventure", "Animation": "Animation", "Comedy": "Comédie", "Crime": "Crime",
+           "Documentary": "Documentaire", "Drama": "Drame", "Family": "Familial", "Fantasy": "Fantastique", "History": "Histoire",
+           "Horror": "Horreur", "Music": "Musique", "Mystery": "Mystère", "Romance": "Romance", "Science Fiction": "Science-Fiction",
+           "TV Movie": "Téléfilm", "Thriller": "Thriller", "War": "Guerre", "Western": "Western"},
+    "IT": {"Action": "Azione", "Adventure": "Avventura", "Animation": "Animazione", "Comedy": "Commedia", "Crime": "Crime",
+           "Documentary": "Documentario", "Drama": "Drammatico", "Family": "Famiglia", "Fantasy": "Fantasy", "History": "Storico",
+           "Horror": "Horror", "Music": "Musica", "Mystery": "Mistero", "Romance": "Romantico", "Science Fiction": "Fantascienza",
+           "TV Movie": "Film TV", "Thriller": "Thriller", "War": "Guerra", "Western": "Western"},
+    "UK": {"Action": "Бойовик", "Adventure": "Пригоди", "Animation": "Анімація", "Comedy": "Комедія", "Crime": "Кримінал",
+           "Documentary": "Документальний", "Drama": "Драма", "Family": "Сімейний", "Fantasy": "Фентезі", "History": "Історичний",
+           "Horror": "Жахи", "Music": "Музика", "Mystery": "Детектив", "Romance": "Мелодрама", "Science Fiction": "Фантастика",
+           "TV Movie": "Телефільм", "Thriller": "Трилер", "War": "Військовий", "Western": "Вестерн"},
+}
+
+
+def genre_name(genre: str, lang: str | None) -> str:
+    """Localized label for a dataset genre; English (the dataset language) is the fallback."""
+    code = (lang or "PL").upper().strip()
+    return GENRE_NAMES.get(code, {}).get(genre, genre)

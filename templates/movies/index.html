@@ -93,7 +93,7 @@
             <h2 class="text-2xl font-black text-white tracking-tight flex items-center gap-2">
                 <i data-lucide="sparkles" class="w-6 h-6 text-brand-gold animate-pulse"></i> {{ "recommended_for_you"|t:current_lang }}
             </h2>
-            <p class="text-xs text-gray-400">{{ "recommended_desc"|t:current_lang }} ({{ active_profile }})</p>
+            <p class="text-xs text-gray-400">{{ "recommended_desc"|t:current_lang }} ({{ active_profile_display }})</p>
         </div>
     </div>
 
@@ -177,7 +177,7 @@
         <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-white/5">
             <span class="text-xs font-bold text-gray-400 mr-1 shrink-0 flex items-center gap-1.5">
                 <i data-lucide="tv" class="w-3.5 h-3.5 text-brand-gold"></i>
-                VOD:
+                {{ "vod_label"|t:current_lang }}
             </span>
             <label class="cursor-pointer shrink-0">
                 <input type="radio" name="vod" value="all" checked class="peer hidden"
@@ -238,7 +238,7 @@
                        hx-include="#filter-form"
                        hx-target="#movie-grid-container">
                 <span class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-white/5 text-gray-300 border border-white/10 peer-checked:bg-brand-gold peer-checked:text-black peer-checked:border-brand-gold transition-all block">
-                    {{ g }}
+                    {{ g|genre:current_lang }}
                 </span>
             </label>
             {% endfor %}

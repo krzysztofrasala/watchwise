@@ -1,9 +1,10 @@
-const CACHE_NAME = 'watchwise-cache-v2';
+// v3: purge pages cached before language-aware caching (they could be in a stale UI language)
+const CACHE_NAME = 'watchwise-cache-v3';
+const LANG_MARKER = '/__ww_lang__';
 const OFFLINE_URL = '/offline/';
 
 // Critical assets to pre-cache on install
 const PRECACHE_ASSETS = [
-  '/',
   '/offline/',
   '/static/css/main.css',
   '/static/icons/favicon.svg',
@@ -14,6 +15,26 @@ const PRECACHE_ASSETS = [
   'https://unpkg.com/lucide@latest',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&display=swap'
 ];
+
+// Offline page cache holds pages of ONE language only: when the UI language changes,
+// every cached page (HTML) from the previous language is dropped before the new one is stored.
+async function cachePageForLang(request, response, lang) {
+  const cache = await caches.open(CACHE_NAME);
+  if (lang) {
+    const marker = await cache.match(LANG_MARKER);
+    const previous = marker ? await marker.text() : '';
+    if (previous !== lang) {
+      const keys = await cache.keys();
+      await Promise.all(keys.filter((req) => {
+        const u = new URL(req.url);
+        return u.origin === self.location.origin && !u.pathname.startsWith('/static/') && u.pathname !== '/offline/' && u.pathname !== LANG_MARKER;
+      }).map((req) => cache.delete(req)));
+      await cache.put(LANG_MARKER, new Response(lang));
+      await cache.add(OFFLINE_URL).catch(() => {}); // re-fetch the offline page in the new language
+    }
+  }
+  await cache.put(request, response);
+}
 
 // 1. Install: Pre-cache core shell and offline page
 self.addEventListener('install', (event) => {
@@ -65,9 +86,8 @@ self.addEventListener('fetch', (event) => {
           // If valid response, save copy in cache for offline browsing
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
+            const lang = networkResponse.headers.get('X-App-Lang') || '';
+            event.waitUntil(cachePageForLang(request, responseClone, lang));
           }
           return networkResponse;
         })

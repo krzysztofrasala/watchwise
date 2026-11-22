@@ -29,7 +29,7 @@
             <select name="genre" class="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-400">
                 <option value="All">{{ "all_genres"|t:current_lang }}</option>
                 {% for g in genres %}
-                <option value="{{ g }}" {% if g == selected_genre %}selected{% endif %}>{{ g }}</option>
+                <option value="{{ g }}" {% if g == selected_genre %}selected{% endif %}>{{ g|genre:current_lang }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -68,6 +68,7 @@
                 <option value="ko" {% if selected_language == "ko" %}selected{% endif %}>한국어 (KO 🇰🇷)</option>
                 <option value="de" {% if selected_language == "de" %}selected{% endif %}>Deutsch (DE 🇩🇪)</option>
                 <option value="it" {% if selected_language == "it" %}selected{% endif %}>Italiano (IT 🇮🇹)</option>
+                <option value="uk" {% if selected_language == "uk" %}selected{% endif %}>Українська (UK 🇺🇦)</option>
             </select>
         </div>
 

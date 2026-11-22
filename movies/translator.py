@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import hashlib
+import re
 import json
 import logging
 import os
@@ -69,6 +70,9 @@ def translate_text(text: str, target_lang: str = "ES", source_lang: str | None =
     if target_code in ["en", "pl"] and not source_lang:
         # Standard native languages already in dataset
         return text
+
+    if target_code == "uk" and re.search(r"[іїєґІЇЄҐ]|[а-яА-Я]{3}", text):
+        return text  # already Ukrainian/Cyrillic (e.g. straight from TMDB): nothing to translate
 
     # Detect source language if not explicitly provided
     if not source_lang:

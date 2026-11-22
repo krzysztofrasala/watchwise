@@ -51,7 +51,7 @@
                 <div class="flex items-center justify-between text-[11px] text-gray-400">
                     <span>{{ movie.year|default:"" }}</span>
                     {% if movie.genres_list %}
-                    <span class="truncate max-w-[90px] text-gray-400">{{ movie.genres_list.0 }}</span>
+                    <span class="truncate max-w-[90px] text-gray-400">{{ movie.genres_list.0|genre:current_lang }}</span>
                     {% endif %}
                 </div>
             </div>

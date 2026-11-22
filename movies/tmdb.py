@@ -265,15 +265,7 @@ def get_provider_direct_url(provider_name: str, provider_id: int | None = None, 
 def get_justwatch_url(title: str, lang: str = "PL") -> str:
     """Return JustWatch search URL for movie title."""
     lang_upper = (lang or "PL").upper()
-    region_map = {
-        "PL": "pl",
-        "EN": "us",
-        "DE": "de",
-        "ES": "es",
-        "FR": "fr",
-        "IT": "it",
-    }
-    region = region_map.get(lang_upper, "us" if lang_upper != "PL" else "pl")
+    region = i18n.lang_cfg(lang_upper, "justwatch")
     return f"https://www.justwatch.com/{region}/search?q={quote(title or '')}"
 
 
@@ -537,25 +529,9 @@ def _fetch_movie_details_uncached(movie_id: int, lang: str = "PL", media_type: s
     api_key = get_api_key()
     if not api_key:
         return get_offline_vod(movie_id, lang=lang)
-    lang_map = {
-        "PL": "pl-PL",
-        "EN": "en-US",
-        "DE": "de-DE",
-        "ES": "es-ES",
-        "FR": "fr-FR",
-        "IT": "it-IT",
-    }
     lang_code = lang.upper() if lang else "PL"
-    tmdb_lang = lang_map.get(lang_code, "pl-PL")
-    region_map = {
-        "PL": "PL",
-        "EN": "US",
-        "DE": "DE",
-        "ES": "ES",
-        "FR": "FR",
-        "IT": "IT",
-    }
-    region_code = region_map.get(lang_code, "PL")
+    tmdb_lang = i18n.lang_cfg(lang_code, "tmdb")
+    region_code = i18n.lang_cfg(lang_code, "region")
 
     try:
         params = {
@@ -735,7 +711,6 @@ def fetch_movie_details(movie_id: int, lang: str = "PL", media_type: str = None)
     return details
 
 
-REGION_BY_LANG = {"PL": "PL", "EN": "US", "DE": "DE", "ES": "ES", "FR": "FR", "IT": "IT"}
 EMPTY_VOD = {"vod_flatrate": [], "vod_rent": [], "vod_buy": [], "vod_providers": [], "justwatch_url": None}
 
 
@@ -759,7 +734,7 @@ def fetch_vod_info(movie_id: int, lang: str = "PL", media_type: str = None, titl
         # Transient failure or no key: serve offline data but do not cache it
         return get_offline_vod(movie_id, title=title, lang=lang) or dict(EMPTY_VOD)
 
-    region_code = REGION_BY_LANG.get(lang_code, "PL")
+    region_code = i18n.lang_cfg(lang_code, "region")
     results = data.get("results", {})
     reg = results.get(region_code) or results.get("PL") or {}
 
@@ -791,6 +766,67 @@ def fetch_vod_info(movie_id: int, lang: str = "PL", media_type: str = None, titl
     return info
 
 
+LOCALIZED_BASICS_TTL = 60 * 60 * 24
+
+
+def _needs_title_fallback(raw: dict, lang: str | None) -> bool:
+    """TMDB has no translation when the "localized" title is just the original one (e.g. Chinese or Spanish
+    in a Ukrainian UI). English is then a more readable fallback than the original script."""
+    code = (lang or "PL").lower()[:2]
+    title = raw.get("title") or raw.get("name") or ""
+    original = raw.get("original_title") or raw.get("original_name") or ""
+    orig_lang = (raw.get("original_language") or "").lower()
+    return bool(title) and title == original and orig_lang not in ("", "en", code) and code != "en"
+
+
+def apply_title_fallback(items: list[dict], lang: str | None) -> list[dict]:
+    """Replace untranslated titles (and empty overviews) with the English ones, fetched in parallel + cached."""
+    from concurrent.futures import ThreadPoolExecutor
+    todo = [it for it in items if it.get("_fb")]
+    def _fix(it):
+        en = fetch_localized_basics(it.get("movie_id"), "EN", it.get("media_type"))
+        if en.get("title"):
+            it["title"] = en["title"]
+        if not it.get("overview") and en.get("overview"):
+            it["overview"] = en["overview"]
+        it.pop("_fb", None)
+    if todo:
+        with ThreadPoolExecutor(max_workers=min(len(todo), 8)) as ex:
+            list(ex.map(_fix, todo))
+    return items
+
+
+def fetch_localized_basics(movie_id, lang: str = "PL", media_type: str | None = None) -> dict:
+    """Title, overview, tagline and poster of a title in the UI language (one cached TMDB request).
+
+    The bundled dataset only has one language, so for every other UI language catalog cards are localized
+    from here. Returns {} on any failure so callers can keep the dataset values.
+    """
+    api_key = get_api_key()
+    if not api_key or not movie_id:
+        return {}
+    endpoint = "tv" if media_type == "tv" else "movie"
+    data = _tmdb_get_cached(f"{BASE_URL}/{endpoint}/{int(movie_id)}",
+                            {"api_key": api_key, "language": i18n.lang_cfg(lang, "tmdb")},
+                            ttl=LOCALIZED_BASICS_TTL, timeout=4)
+    if not data or data.get("status_code"):
+        return {}
+    basics = {
+        "title": data.get("title") or data.get("name") or "",
+        "overview": data.get("overview") or "",
+        "tagline": data.get("tagline") or "",
+        "poster_path": data.get("poster_path") or "",
+        "backdrop_path": data.get("backdrop_path") or "",
+    }
+    if _needs_title_fallback(data, lang) or not basics["overview"]:
+        en = fetch_localized_basics(movie_id, "EN", media_type) if (lang or "PL").upper() != "EN" else {}
+        if _needs_title_fallback(data, lang) and en.get("title"):
+            basics["title"] = en["title"]
+        if not basics["overview"]:
+            basics["_overview_fallback"] = en.get("overview") or ""
+    return basics
+
+
 @_ttl_cached(LIST_CACHE_TTL)
 def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict]:
     """Search movies and TV series via TMDB multi search API."""
@@ -799,15 +835,7 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
     api_key = get_api_key()
     if not api_key:
         return []
-    lang_map = {
-        "PL": "pl-PL",
-        "EN": "en-US",
-        "DE": "de-DE",
-        "ES": "es-ES",
-        "FR": "fr-FR",
-        "IT": "it-IT",
-    }
-    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+    tmdb_lang = i18n.lang_cfg(lang, "tmdb")
 
     try:
         url = f"{BASE_URL}/search/multi"
@@ -845,6 +873,7 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
                     "backdrop_url": get_backdrop_url(entry.get("backdrop_path")),
                     "vote_average": round(float(entry.get("vote_average", 0.0)), 1),
                     "overview": entry.get("overview", ""),
+                    "_fb": _needs_title_fallback(entry, lang),
                 })
 
             for item in results:
@@ -858,7 +887,7 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
                             break
                 if len(items) >= limit:
                     break
-            return items
+            return apply_title_fallback(items, lang)
     except Exception:
         pass
     return []
@@ -902,8 +931,7 @@ def search_person_movies(
     api_key = get_api_key()
     if not api_key:
         return None, []
-    lang_map = {"PL": "pl-PL", "EN": "en-US", "DE": "de-DE", "ES": "es-ES", "FR": "fr-FR", "IT": "it-IT"}
-    tmdb_lang = lang_map.get((lang or "PL").upper(), "pl-PL")
+    tmdb_lang = i18n.lang_cfg(lang, "tmdb")
     try:
         found = _tmdb_get_cached(f"{BASE_URL}/search/person",
                           {"api_key": api_key, "query": name.strip(), "language": tmdb_lang, "include_adult": False})
@@ -959,10 +987,11 @@ def search_person_movies(
                 "backdrop_url": get_backdrop_url(e.get("backdrop_path")),
                 "vote_average": round(float(e.get("vote_average") or 0.0), 1),
                 "overview": e.get("overview", ""),
+                "_fb": _needs_title_fallback(e, lang),
             })
             if len(items) >= limit:
                 break
-        return person.get("name"), items
+        return person.get("name"), apply_title_fallback(items, lang)
     except Exception:
         return None, []
 
@@ -972,9 +1001,8 @@ def fetch_similar_movies(movie_id: int, lang: str = "PL", limit: int = 6) -> lis
     api_key = get_api_key()
     if not api_key:
         return []
-    lang_map = {"PL": "pl-PL", "EN": "en-US", "DE": "de-DE", "ES": "es-ES", "FR": "fr-FR", "IT": "it-IT"}
     data = _tmdb_get(f"{BASE_URL}/movie/{int(movie_id)}/recommendations",
-                     {"api_key": api_key, "language": lang_map.get((lang or "PL").upper(), "pl-PL")})
+                     {"api_key": api_key, "language": i18n.lang_cfg(lang, "tmdb")})
     items = []
     for e in (data or {}).get("results", []):
         if not e.get("poster_path") or e.get("adult"):
@@ -990,10 +1018,11 @@ def fetch_similar_movies(movie_id: int, lang: str = "PL", limit: int = 6) -> lis
             "backdrop_url": get_backdrop_url(e.get("backdrop_path")),
             "vote_average": round(float(e.get("vote_average") or 0.0), 1),
             "overview": e.get("overview", ""),
+            "_fb": _needs_title_fallback(e, lang),
         })
         if len(items) >= limit:
             break
-    return items
+    return apply_title_fallback(items, lang)
 
 
 @_ttl_cached(LIST_CACHE_TTL)
@@ -1002,15 +1031,7 @@ def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: st
     api_key = get_api_key()
     if not api_key:
         return []
-    lang_map = {
-        "PL": "pl-PL",
-        "EN": "en-US",
-        "DE": "de-DE",
-        "ES": "es-ES",
-        "FR": "fr-FR",
-        "IT": "it-IT",
-    }
-    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+    tmdb_lang = i18n.lang_cfg(lang, "tmdb")
     valid_type = "tv" if media_type == "tv" else "movie"
 
     try:
@@ -1045,11 +1066,12 @@ def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: st
                     "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
                     "vote_average": round(float(item.get("vote_average", 0.0)), 1),
                     "overview": item.get("overview", ""),
+                    "_fb": _needs_title_fallback(item, lang),
                     "release_date": date_str,
                 })
                 if len(items) >= limit:
                     break
-            return items
+            return apply_title_fallback(items, lang)
     except Exception:
         pass
     return []
@@ -1061,25 +1083,9 @@ def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
     api_key = get_api_key()
     if not api_key:
         return []
-    lang_map = {
-        "PL": "pl-PL",
-        "EN": "en-US",
-        "DE": "de-DE",
-        "ES": "es-ES",
-        "FR": "fr-FR",
-        "IT": "it-IT",
-    }
-    tmdb_lang = lang_map.get(lang.upper() if lang else "PL", "pl-PL")
+    tmdb_lang = i18n.lang_cfg(lang, "tmdb")
 
-    region_map = {
-        "PL": "PL",
-        "EN": "US",
-        "DE": "DE",
-        "ES": "ES",
-        "FR": "FR",
-        "IT": "IT",
-    }
-    tmdb_region = region_map.get(lang.upper() if lang else "PL", "US" if (lang or "").upper() != "PL" else "PL")
+    tmdb_region = i18n.lang_cfg(lang, "region")
 
     try:
         url = f"{BASE_URL}/movie/upcoming"
@@ -1115,11 +1121,12 @@ def fetch_upcoming(lang: str = "PL", limit: int = 12) -> list[dict]:
                     "backdrop_url": get_backdrop_url(item.get("backdrop_path")),
                     "vote_average": round(float(item.get("vote_average", 0.0)), 1),
                     "overview": item.get("overview", ""),
+                    "_fb": _needs_title_fallback(item, lang),
                     "release_date": date_str,
                 })
                 if len(items) >= limit:
                     break
-            return items
+            return apply_title_fallback(items, lang)
     except Exception:
         pass
     return []

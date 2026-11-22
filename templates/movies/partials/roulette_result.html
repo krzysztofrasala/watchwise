@@ -89,7 +89,7 @@
                     <span class="font-bold">{{ movie.year }}</span>
                     {% endif %}
                     {% if movie.genres_list %}
-                    <span class="text-gray-400">• {{ movie.genres_list|slice:":3"|join:", " }}</span>
+                    <span class="text-gray-400">• {% for g in movie.genres_list|slice:":3" %}{{ g|genre:current_lang }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
                     {% endif %}
                 </div>
 

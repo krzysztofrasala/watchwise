@@ -1,7 +1,7 @@
 """Natural language query parsing for Cinescope Django.
 
 Converts free-text queries like 'mroczny thriller z lat 90' or 'comédie française des années 80'
-into structured movie filtering parameters. The local parser understands PL, EN, DE, ES, FR and IT
+into structured movie filtering parameters. The local parser understands PL, EN, DE, ES, FR, IT and UK
 (diacritics optional). If a Gemini API key is configured it is tried first, with the local
 parser as the fallback.
 """
@@ -89,6 +89,7 @@ LANGUAGE_PATTERNS: dict[str, list[str]] = {
     "ko": ["koreansk", "korean", "koreanisch", "coreano", "coreen"],
     "de": ["niemieck", "german", "deutsch", "aleman", "allemand", "tedesc"],
     "it": ["wlosk", "italian", "italienisch", "italien"],
+    "uk": ["ukrain", "ukrainsk"],
     "en": ["angielsk", "english", "englisch", "ingles", "anglais", "inglese", "amerykansk", "american",
            "amerikanisch", "americano", "americain"],
 }
