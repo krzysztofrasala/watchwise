@@ -1,4 +1,6 @@
+import itertools
 import os
+import re
 import json
 from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
@@ -1284,6 +1286,23 @@ def _rate_limited(request, scope: str, limit: int, window: int) -> bool:
     return count > limit
 
 
+_ASSISTANT_FILLER = re.compile(
+    r"\b(szukam|chce|chcialbym|chcialabym|poleć|polec|pokaz|pokaż|znajdz|znajdź|film[a-z]*|serial[a-z]*|z udzialem|z udziałem|"
+    r"z|ze|w ktorym|w którym|gra|grajacy|grający|aktor[a-z]*|aktorem|reżyser[a-z]*|rezyser[a-z]*|"
+    r"i'm|im|looking|for|want|find|show|me|a|an|the|movie[s]?|film[s]?|with|starring|featuring|by|directed|"
+    r"suche|sucht|einen|ein|mit|von|busco|quiero|una|un|pelicula|película|cherche|je|avec|un|une|"
+    r"cerco|voglio|con|di)\b",
+    re.IGNORECASE,
+)
+
+
+def _assistant_subject(message: str) -> str:
+    """Strip filler words so 'szukam filmu z nicolas cage' becomes 'nicolas cage'."""
+    cleaned = _ASSISTANT_FILLER.sub(" ", message)
+    cleaned = re.sub(r"[^\w\s'\-\.]", " ", cleaned, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned).strip() or message.strip()
+
+
 def assistant_chat_partial(request):
     ctx = get_base_context(request)
     lang = ctx["current_lang"]
@@ -1296,18 +1315,42 @@ def assistant_chat_partial(request):
 
     parsed = nl_query.parse_natural_query(user_message)
 
-    filtered = services.filter_movies(
-        genre=parsed["genre"],
-        year_min=parsed["year_min"],
-        year_max=parsed["year_max"],
-        vote_min=parsed["vote_min"],
-        language=parsed["language"],
-        sort_by=parsed["sort_by"],
-        per_page=6,
-        lang=lang,
-    )
+    person_name = None
+    not_found = False
+    if parsed.get("understood", True):
+        filtered = services.filter_movies(
+            genre=parsed["genre"],
+            year_min=parsed["year_min"],
+            year_max=parsed["year_max"],
+            vote_min=parsed["vote_min"],
+            language=parsed["language"],
+            sort_by=parsed["sort_by"],
+            per_page=6,
+            lang=lang,
+        )
+        results = filtered["items"]
+    else:
+        # No genre/year/rating recognised: treat the message as a person or title search
+        subject = _assistant_subject(user_message)
+        person_name, results = tmdb.search_person_movies(subject, lang=lang, limit=6)
+        if not results:
+            # Polish inflection: "tomem hanksem" -> "tom hanks", "brucem willisem" -> "bruce willis"
+            def _variants(word: str) -> list[str]:
+                out = [word]
+                for suffix, keep in (("iem", 0), ("em", 1), ("em", 0), ("owi", 0), ("a", 0)):
+                    if len(word) > 4 and word.endswith(suffix):
+                        out.append(word[:len(word) - len(suffix) + keep])
+                return list(dict.fromkeys(out))
 
-    results = filtered["items"]
+            words = subject.split()[:3]
+            for combo in itertools.islice(itertools.product(*[_variants(w) for w in words]), 1, 9):
+                person_name, results = tmdb.search_person_movies(" ".join(combo), lang=lang, limit=6)
+                if results:
+                    break
+        if not results:
+            results = tmdb.search_tmdb_multi(subject, lang=lang, limit=6)
+        not_found = not results
+
     for item in results:
         prepare_movie_item(item, lang=lang)
 
@@ -1315,6 +1358,8 @@ def assistant_chat_partial(request):
         "user_message": user_message,
         "parsed": parsed,
         "movies": results,
+        "person_name": person_name,
+        "not_found": not_found,
     })
     return render(request, "movies/partials/assistant_response.html", ctx)
 

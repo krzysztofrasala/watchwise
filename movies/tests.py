@@ -628,3 +628,11 @@ class HardeningTests(TestCase):
 
     def test_bad_page_param_does_not_500(self):
         self.assertEqual(self.client.get("/discover/?page=abc").status_code, 200)
+
+
+class AssistantSubjectTests(TestCase):
+    def test_subject_extraction_strips_filler_words(self):
+        from . import views
+        self.assertEqual(views._assistant_subject("szukam filmu z nicolas cage"), "nicolas cage")
+        self.assertEqual(views._assistant_subject("movie with Leonardo DiCaprio"), "Leonardo DiCaprio")
+        self.assertEqual(views._assistant_subject("film z brucem willisem"), "brucem willisem")

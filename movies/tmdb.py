@@ -865,6 +865,54 @@ def search_tmdb_multi(query: str, lang: str = "PL", limit: int = 8) -> list[dict
 
 
 @_ttl_cached(LIST_CACHE_TTL)
+def search_person_movies(name: str, lang: str = "PL", limit: int = 6) -> tuple[str | None, list[dict]]:
+    """Find a person (actor/director) by name and return (canonical_name, their most popular movies)."""
+    if not name or len(name.strip()) < 3:
+        return None, []
+    api_key = get_api_key()
+    if not api_key:
+        return None, []
+    lang_map = {"PL": "pl-PL", "EN": "en-US", "DE": "de-DE", "ES": "es-ES", "FR": "fr-FR", "IT": "it-IT"}
+    tmdb_lang = lang_map.get((lang or "PL").upper(), "pl-PL")
+    try:
+        found = _tmdb_get(f"{BASE_URL}/search/person",
+                          {"api_key": api_key, "query": name.strip(), "language": tmdb_lang, "include_adult": False})
+        people = (found or {}).get("results") or []
+        if not people:
+            return None, []
+        person = max(people[:3], key=lambda p: p.get("popularity") or 0)
+        if (person.get("popularity") or 0) < 3:
+            return None, []
+        credits = _tmdb_get(f"{BASE_URL}/person/{person['id']}/movie_credits",
+                            {"api_key": api_key, "language": tmdb_lang})
+        entries = (credits or {}).get("cast", []) + (credits or {}).get("crew", [])
+        entries = [e for e in entries if e.get("poster_path") and (e.get("vote_count") or 0) >= 50 and not e.get("adult")]
+        entries.sort(key=lambda e: e.get("popularity") or 0, reverse=True)
+        items, seen = [], set()
+        for e in entries:
+            mid = e.get("id")
+            if not mid or mid in seen:
+                continue
+            seen.add(mid)
+            date_str = e.get("release_date") or ""
+            items.append({
+                "movie_id": mid,
+                "title": e.get("title") or e.get("original_title") or "",
+                "media_type": "movie",
+                "is_tv": False,
+                "year": int(date_str[:4]) if date_str[:4].isdigit() else None,
+                "poster_url": get_poster_url(e.get("poster_path")),
+                "backdrop_url": get_backdrop_url(e.get("backdrop_path")),
+                "vote_average": round(float(e.get("vote_average") or 0.0), 1),
+                "overview": e.get("overview", ""),
+            })
+            if len(items) >= limit:
+                break
+        return person.get("name"), items
+    except Exception:
+        return None, []
+
+
 def fetch_trending(media_type: str = "movie", time_window: str = "day", lang: str = "PL", limit: int = 12) -> list[dict]:
     """Fetch trending movies or TV series from TMDB API."""
     api_key = get_api_key()
